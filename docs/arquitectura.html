@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReportaTuCiudad — Diagrama de arquitectura</title>
+<style>
+  :root { --bg:#f5f7f9; --card:#ffffff; --ink:#1b2733; --muted:#5b6b7a; --line:#dde3e9; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#141a20; --card:#1d252d; --ink:#e8edf2; --muted:#9fb0bf; --line:#2c3742; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:28px 18px 48px; background:var(--bg); color:var(--ink);
+         font-family: "Segoe UI", Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  p.sub { margin: 0 0 22px; color: var(--muted); font-size: .95rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+          padding: 14px; overflow-x: auto; }
+  .card svg { display:block; min-width: 900px; max-width: 100%; height: auto; }
+  .leyenda { margin-top: 22px; display: grid; gap: 10px;
+             grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .item b { display:block; font-size: .92rem; margin-bottom: 3px; }
+  .item span { color: var(--muted); font-size: .85rem; }
+  footer { margin-top: 26px; color: var(--muted); font-size: .8rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ReportaTuCiudad — Boceto del diagrama de arquitectura</h1>
+  <p class="sub">Fase 1: Planteamiento del proyecto · Prototipo serverless en AWS · Infraestructura como código con Terraform</p>
+
+  <div class="card">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 700" width="1180" height="700">
+<rect width="1180" height="700" fill="#ffffff"/>
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8a97a3"/></marker></defs>
+<text x="30" y="40" font-family="Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#1b2733">ReportaTuCiudad — Boceto de arquitectura en AWS</text>
+<text x="30" y="60" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#5b6b7a">Prototipo serverless: reporte ciudadano, gestión municipal simulada y notificaciones · Infraestructura provisionada con Terraform</text>
+<path d="M 30 72 L 1150 72" stroke="#dde3e9" stroke-width="1"/>
+<rect x="30" y="110" width="175" height="80" rx="10" fill="#eaf2fb" stroke="#2f6fb5" stroke-width="1.6"/>
+<text x="117.5" y="135.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1b2733">Cuenta municipal</text>
+<text x="117.5" y="152.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">(simulada)</text>
+<text x="117.5" y="167.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Panel administrativo</text>
+<rect x="30" y="215" width="175" height="80" rx="10" fill="#eaf2fb" stroke="#2f6fb5" stroke-width="1.6"/>
+<text x="117.5" y="240.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1b2733">Ciudadano</text>
+<text x="117.5" y="257.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Navegador / móvil</text>
+<text x="117.5" y="272.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Reporta y consulta</text>
+<rect x="240" y="110" width="165" height="185" rx="10" fill="#e7f4ef" stroke="#2e8b6b" stroke-width="1.6"/>
+<text x="322.5" y="127" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="9.5" letter-spacing="0.8" fill="#2e8b6b">CLIENTE WEB</text>
+<text x="322.5" y="178.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1b2733">Frontend SPA</text>
+<text x="322.5" y="195.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">HTML / JS</text>
+<text x="322.5" y="210.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Mapa de reportes</text>
+<text x="322.5" y="225.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Amazon S3</text>
+<text x="322.5" y="240.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">(sitio estático)</text>
+<rect x="440" y="110" width="150" height="185" rx="10" fill="#fdf1e3" stroke="#d9822b" stroke-width="1.6"/>
+<text x="515.0" y="127" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="9.5" letter-spacing="0.8" fill="#d9822b">ENTRADA</text>
+<text x="515.0" y="171.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1b2733">API Gateway</text>
+<text x="515.0" y="188.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">REST / HTTPS</text>
+<text x="515.0" y="203.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">/reportes</text>
+<text x="515.0" y="218.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">/comentarios</text>
+<text x="515.0" y="233.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">/admin</text>
+<text x="515.0" y="248.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Autenticación</text>
+<rect x="625" y="92" width="255" height="221" rx="12" fill="none" stroke="#d9822b" stroke-width="1.3" stroke-dasharray="6 5"/>
+<text x="637" y="109" font-family="Helvetica, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#d9822b">AWS Lambda (lógica de negocio)</text>
+<rect x="640" y="118" width="225" height="42" rx="10" fill="#fdf1e3" stroke="#d9822b" stroke-width="1.6"/>
+<text x="752.5" y="144.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#1b2733">Usuarios y sesión</text>
+<rect x="640" y="168" width="225" height="42" rx="10" fill="#fdf1e3" stroke="#d9822b" stroke-width="1.6"/>
+<text x="752.5" y="194.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#1b2733">Reportes (alta / consulta)</text>
+<rect x="640" y="218" width="225" height="42" rx="10" fill="#fdf1e3" stroke="#d9822b" stroke-width="1.6"/>
+<text x="752.5" y="244.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#1b2733">Comentarios y confirmaciones</text>
+<rect x="640" y="266" width="225" height="38" rx="10" fill="#fdf1e3" stroke="#d9822b" stroke-width="1.6"/>
+<text x="752.5" y="290.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#1b2733">Panel municipal / estados</text>
+<rect x="915" y="110" width="235" height="82" rx="10" fill="#eeebf9" stroke="#6b5bb5" stroke-width="1.6"/>
+<text x="1032.5" y="136.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1b2733">Amazon DynamoDB</text>
+<text x="1032.5" y="153.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Usuarios, Reportes,</text>
+<text x="1032.5" y="168.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Comentarios, Historial</text>
+<rect x="915" y="213" width="235" height="100" rx="10" fill="#eeebf9" stroke="#6b5bb5" stroke-width="1.6"/>
+<text x="1032.5" y="240.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1b2733">Amazon S3</text>
+<text x="1032.5" y="257.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Fotografías del reporte</text>
+<text x="1032.5" y="272.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">y evidencias de solución</text>
+<text x="1032.5" y="287.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">(URLs prefirmadas)</text>
+<rect x="440" y="375" width="710" height="130" rx="12" fill="none" stroke="#2e8b6b" stroke-width="1.3" stroke-dasharray="6 5"/>
+<text x="452" y="392" font-family="Helvetica, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#2e8b6b">Procesamiento asíncrono y notificaciones</text>
+<rect x="460" y="405" width="200" height="85" rx="10" fill="#e7f4ef" stroke="#2e8b6b" stroke-width="1.6"/>
+<text x="560.0" y="425.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1b2733">Amazon SQS</text>
+<text x="560.0" y="442.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Cola de eventos:</text>
+<text x="560.0" y="457.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">nuevo reporte /</text>
+<text x="560.0" y="472.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">cambio de estado</text>
+<rect x="700" y="405" width="200" height="85" rx="10" fill="#e7f4ef" stroke="#2e8b6b" stroke-width="1.6"/>
+<text x="800.0" y="432.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1b2733">Lambda Procesador</text>
+<text x="800.0" y="449.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Valida, deduplica</text>
+<text x="800.0" y="464.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">y arma el mensaje</text>
+<rect x="940" y="405" width="195" height="85" rx="10" fill="#e7f4ef" stroke="#2e8b6b" stroke-width="1.6"/>
+<text x="1037.5" y="425.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1b2733">Amazon SNS</text>
+<text x="1037.5" y="442.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Notifica al ciudadano</text>
+<text x="1037.5" y="457.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">y a los seguidores</text>
+<text x="1037.5" y="472.0" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">del reporte</text>
+<rect x="30" y="560" width="355" height="78" rx="10" fill="#f2f5f7" stroke="#8a97a3" stroke-width="1.6"/>
+<text x="207.5" y="591.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1b2733">AWS IAM</text>
+<text x="207.5" y="608.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Roles y permisos mínimos entre servicios</text>
+<rect x="405" y="560" width="340" height="78" rx="10" fill="#f2f5f7" stroke="#8a97a3" stroke-width="1.6"/>
+<text x="575.0" y="591.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1b2733">AWS Secrets Manager</text>
+<text x="575.0" y="608.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Llaves y credenciales de la aplicación</text>
+<rect x="765" y="560" width="385" height="78" rx="10" fill="#f2f5f7" stroke="#8a97a3" stroke-width="1.6"/>
+<text x="957.5" y="591.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1b2733">Amazon CloudWatch</text>
+<text x="957.5" y="608.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#5b6b7a">Logs, métricas, alarmas y dashboard del prototipo</text>
+<path d="M 205 150 L 238 150" fill="none" stroke="#8a97a3" stroke-width="1.8" marker-end="url(#ah)"/>
+<path d="M 205 255 C 222 255 222 200 238 200" fill="none" stroke="#8a97a3" stroke-width="1.8" marker-end="url(#ah)"/>
+<path d="M 405 202 L 438 202" fill="none" stroke="#8a97a3" stroke-width="1.8" marker-end="url(#ah)"/>
+<text x="421.5" y="194" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#5b6b7a">HTTPS</text>
+<path d="M 590 202 L 623 202" fill="none" stroke="#8a97a3" stroke-width="1.8" marker-end="url(#ah)"/>
+<path d="M 880 150 L 913 150" fill="none" stroke="#8a97a3" stroke-width="1.8" marker-end="url(#ah)"/>
+<path d="M 880 250 L 913 250" fill="none" stroke="#8a97a3" stroke-width="1.8" marker-end="url(#ah)"/>
+<path d="M 700 313 C 700 370 640 360 570 402" fill="none" stroke="#8a97a3" stroke-width="1.8" marker-end="url(#ah)"/>
+<text x="615" y="350" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#5b6b7a">evento</text>
+<path d="M 660 447 L 698 447" fill="none" stroke="#8a97a3" stroke-width="1.8" marker-end="url(#ah)"/>
+<path d="M 900 447 L 938 447" fill="none" stroke="#8a97a3" stroke-width="1.8" marker-end="url(#ah)"/>
+<path d="M 1037 492 L 1037 532 L 117 532 L 117 299" fill="none" stroke="#8a97a3" stroke-width="1.8" marker-end="url(#ah)"/>
+<text x="520" y="522" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#5b6b7a">notificación por correo al ciudadano</text>
+</svg>
+  </div>
+
+  <div class="leyenda">
+    <div class="item"><b>Amazon API Gateway</b><span>Punto de entrada HTTPS de la API REST del prototipo.</span></div>
+    <div class="item"><b>AWS Lambda</b><span>Lógica de reportes, comentarios, confirmaciones y estados.</span></div>
+    <div class="item"><b>Amazon DynamoDB</b><span>Usuarios, reportes, comentarios e historial de estados.</span></div>
+    <div class="item"><b>Amazon S3</b><span>Fotografías, evidencias y sitio estático del frontend.</span></div>
+    <div class="item"><b>Amazon SQS + SNS</b><span>Eventos asíncronos y notificaciones por correo al ciudadano.</span></div>
+    <div class="item"><b>IAM · Secrets Manager · CloudWatch</b><span>Permisos mínimos, credenciales y monitoreo del sistema.</span></div>
+    <div class="item"><b>Terraform</b><span>Todos los recursos se crean y destruyen desde los módulos <code>.tf</code> del repositorio.</span></div>
+  </div>
+
+  <footer>Flujo principal: ciudadano → frontend → API Gateway → Lambda → DynamoDB / S3 → SQS → SNS → notificación al ciudadano.</footer>
+</div>
+</body>
+</html>
