@@ -1,0 +1,28 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*.auto.tfvars
+infra/build/
+
+# Secretos y credenciales
+*.pem
+.env
+.env.*
+secrets.tfvars
+
+# Python
+__pycache__/
+*.pyc
+
+# Frontend generado por Terraform
+frontend/js/config.js
+
+# Sistema operativo / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
