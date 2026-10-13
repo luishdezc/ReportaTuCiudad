@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReportaTuCiudad</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="barra">
+  <h1>ReportaTuCiudad</h1>
+  <nav>
+    <a href="index.html">Mapa ciudadano</a>
+    <a href="admin.html">Panel municipal</a>
+    <a href="#" id="salir" class="oculto">Cerrar sesión</a>
+  </nav>
+</header>
+
+<div class="contenedor">
+  <div class="columnas">
+    <!-- ------------------------- columna izquierda ------------------------ -->
+    <div>
+      <!-- sesión -->
+      <div class="tarjeta" id="tarjeta-sesion">
+        <h2>Entrar a la plataforma</h2>
+        <div id="formulario-login">
+          <label for="login-email">Correo</label>
+          <input id="login-email" type="email" placeholder="tucorreo@ejemplo.com">
+          <label for="login-password">Contraseña</label>
+          <input id="login-password" type="password" placeholder="••••••••">
+          <button id="btn-login">Iniciar sesión</button>
+          <button id="btn-ir-registro" class="secundario">Crear una cuenta</button>
+        </div>
+
+        <div id="formulario-registro" class="oculto">
+          <label for="reg-nombre">Nombre</label>
+          <input id="reg-nombre" type="text" placeholder="Nombre y apellido">
+          <label for="reg-email">Correo</label>
+          <input id="reg-email" type="email" placeholder="tucorreo@ejemplo.com">
+          <label for="reg-colonia">Colonia o zona</label>
+          <input id="reg-colonia" type="text" placeholder="Centro">
+          <label for="reg-password">Contraseña (mínimo 8 caracteres)</label>
+          <input id="reg-password" type="password">
+          <button id="btn-registro">Registrarme</button>
+          <button id="btn-ir-login" class="secundario">Ya tengo cuenta</button>
+        </div>
+        <div id="aviso-sesion" class="aviso oculto"></div>
+      </div>
+
+      <!-- nuevo reporte -->
+      <div class="tarjeta oculto" id="tarjeta-reporte">
+        <h2>Reportar un problema</h2>
+        <p class="paso">1. Haz clic en el mapa para marcar la ubicación exacta.</p>
+        <label for="rep-titulo">Título</label>
+        <input id="rep-titulo" type="text" placeholder="Bache profundo sobre Av. Hidalgo">
+        <label for="rep-categoria">Categoría</label>
+        <select id="rep-categoria"></select>
+        <label for="rep-direccion">Referencia o dirección</label>
+        <input id="rep-direccion" type="text" placeholder="Frente al número 240">
+        <label for="rep-descripcion">Descripción</label>
+        <textarea id="rep-descripcion" placeholder="Describe el problema y desde cuándo está así"></textarea>
+        <label for="rep-foto">Fotografía</label>
+        <input id="rep-foto" type="file" accept="image/*">
+        <label>Ubicación seleccionada</label>
+        <input id="rep-coords" type="text" readonly placeholder="Sin ubicación marcada">
+        <button id="btn-crear">Enviar reporte</button>
+        <div id="aviso-reporte" class="aviso oculto"></div>
+      </div>
+
+      <!-- filtros -->
+      <div class="tarjeta">
+        <h2>Filtrar el mapa</h2>
+        <label for="filtro-estado">Estado</label>
+        <select id="filtro-estado"><option value="">Todos</option></select>
+        <label for="filtro-categoria">Categoría</label>
+        <select id="filtro-categoria"><option value="">Todas</option></select>
+        <button id="btn-filtrar" class="secundario">Aplicar filtros</button>
+      </div>
+    </div>
+
+    <!-- ------------------------- columna derecha -------------------------- -->
+    <div>
+      <div id="mapa"></div>
+
+      <div class="tarjeta" style="margin-top:16px">
+        <h2 id="titulo-lista">Reportes de la zona</h2>
+        <div id="lista-reportes"></div>
+      </div>
+
+      <div class="tarjeta oculto" id="tarjeta-detalle">
+        <h2>Detalle del reporte</h2>
+        <div id="detalle"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel municipal | ReportaTuCiudad</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="barra">
+  <h1>ReportaTuCiudad · Panel municipal (simulado)</h1>
+  <nav>
+    <a href="index.html">Mapa ciudadano</a>
+    <a href="#" id="salir">Cerrar sesión</a>
+  </nav>
+</header>
+
+<div class="contenedor">
+  <div class="tarjeta" id="tarjeta-login">
+    <h2>Acceso de la cuenta municipal</h2>
+    <label for="login-email">Correo institucional</label>
+    <input id="login-email" type="email" placeholder="municipio@reportatuciudad.mx">
+    <label for="login-password">Contraseña</label>
+    <input id="login-password" type="password">
+    <button id="btn-login">Entrar</button>
+    <div id="aviso-login" class="aviso oculto"></div>
+  </div>
+
+  <div id="panel" class="oculto">
+    <div class="tarjeta">
+      <h2>Bandeja de reportes</h2>
+      <div class="resumen" id="resumen"></div>
+      <label for="filtro-estado">Filtrar por estado</label>
+      <select id="filtro-estado"><option value="">Todos</option></select>
+      <button id="btn-recargar" class="secundario">Actualizar bandeja</button>
+      <table style="margin-top:14px">
+        <thead>
+          <tr><th>Reporte</th><th>Categoría</th><th>Confirmaciones</th><th>Estado</th><th></th></tr>
+        </thead>
+        <tbody id="tabla-reportes"></tbody>
+      </table>
+    </div>
+
+    <div class="tarjeta oculto" id="tarjeta-atencion">
+      <h2 id="titulo-atencion">Atender reporte</h2>
+      <div id="detalle-admin"></div>
+      <label for="nuevo-estado">Nuevo estado</label>
+      <select id="nuevo-estado"></select>
+      <label for="respuesta">Respuesta al ciudadano</label>
+      <textarea id="respuesta" placeholder="Cuadrilla asignada para el jueves; se repondrá la carpeta asfáltica."></textarea>
+      <label for="evidencia">Evidencia de la solución (obligatoria para cerrar en Resuelto)</label>
+      <input id="evidencia" type="file" accept="image/*">
+      <button id="btn-actualizar">Publicar actualización</button>
+      <div id="aviso-admin" class="aviso oculto"></div>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>
