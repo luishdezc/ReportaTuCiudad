@@ -1,116 +1,153 @@
-/* Panel de la cuenta municipal simulada */
+/* Panel de la cuenta municipal simulada: bandeja por prioridad y cambio de estados. */
 
-const ESTADOS = ["Reportado", "En revisión", "Asignado", "En proceso", "Resuelto"];
-let reporteSeleccionado = null;
+const { createApp } = Vue;
 
-document.addEventListener("DOMContentLoaded", () => {
-  ESTADOS.forEach((e) => {
-    document.getElementById("filtro-estado").appendChild(new Option(e, e));
-    document.getElementById("nuevo-estado").appendChild(new Option(e, e));
-  });
+createApp({
+  data() {
+    const usuario = API.usuario();
+    return {
+      estados: ESTADOS,
 
-  document.getElementById("btn-login").onclick = entrar;
-  document.getElementById("btn-recargar").onclick = cargarBandeja;
-  document.getElementById("btn-actualizar").onclick = publicarActualizacion;
-  document.getElementById("salir").onclick = (e) => { e.preventDefault(); API.cerrarSesion(); location.reload(); };
+      sesionActiva: !!(usuario && usuario.rol === "municipio"),
+      credenciales: { email: "", password: "" },
+      enviando: false,
+      avisoAcceso: null,
 
-  const usuario = API.usuario();
-  if (usuario && usuario.rol === "municipio") mostrarPanel();
-});
+      reportes: [],
+      resumen: {},
+      total: 0,
+      filtroEstado: "",
+      cargando: false,
+      avisoBandeja: null,
 
-async function entrar() {
-  try {
-    const datos = await API.post("/auth/login", {
-      email: document.getElementById("login-email").value,
-      password: document.getElementById("login-password").value,
-    });
-    if (datos.usuario.rol !== "municipio") {
-      throw new Error("Esta cuenta no tiene permisos de la cuenta municipal");
-    }
-    API.guardarSesion(datos.token, datos.usuario);
-    mostrarPanel();
-  } catch (e) {
-    mostrarAviso("aviso-login", e.message, "error");
-  }
-}
+      detalle: null,
+      nuevoEstado: ESTADOS[0],
+      respuesta: "",
+      archivoEvidencia: null,
+      publicando: false,
+      avisoAtencion: null,
+    };
+  },
 
-function mostrarPanel() {
-  document.getElementById("tarjeta-login").classList.add("oculto");
-  document.getElementById("panel").classList.remove("oculto");
-  cargarBandeja();
-}
+  computed: {
+    indiceEstado() {
+      return this.detalle ? ESTADOS.indexOf(this.detalle.reporte.estado) : -1;
+    },
+  },
 
-async function cargarBandeja() {
-  const estado = document.getElementById("filtro-estado").value;
-  try {
-    const datos = await API.get("/admin/reportes" + (estado ? "?estado=" + encodeURIComponent(estado) : ""));
+  mounted() {
+    if (this.sesionActiva) this.cargarBandeja();
+  },
 
-    document.getElementById("resumen").innerHTML = ESTADOS.map((e) =>
-      `<div>${e}<strong>${datos.resumen[e] || 0}</strong></div>`).join("");
+  methods: {
+    claseEstado,
+    fecha,
+    hace,
+    iconoCategoria,
+    iconoEstado,
 
-    document.getElementById("tabla-reportes").innerHTML = datos.reportes.map((r) => `
-      <tr>
-        <td><strong>${escapar(r.titulo)}</strong><br><span class="paso">${escapar(r.direccion || "")} · ${fecha(r.creadoEn)}</span></td>
-        <td>${escapar(r.categoria)}</td>
-        <td>${r.confirmaciones}</td>
-        <td><span class="${claseEstado(r.estado)}">${r.estado}</span></td>
-        <td><button class="pequeno secundario" onclick="atender('${r.reportId}')">Atender</button></td>
-      </tr>`).join("") || "<tr><td colspan='5' class='paso'>No hay reportes con ese filtro.</td></tr>";
-  } catch (e) {
-    mostrarAviso("aviso-login", e.message, "error");
-  }
-}
+    // ----------------------------------------------------------- acceso
+    async entrar() {
+      this.enviando = true;
+      this.avisoAcceso = null;
+      try {
+        const datos = await API.post("/auth/login", this.credenciales);
+        if (datos.usuario.rol !== "municipio") {
+          throw new Error("Esa cuenta es de ciudadano. Entra con la cuenta municipal.");
+        }
+        API.guardarSesion(datos.token, datos.usuario);
+        this.sesionActiva = true;
+        this.credenciales = { email: "", password: "" };
+        this.cargarBandeja();
+      } catch (e) {
+        this.avisoAcceso = { tipo: "error", texto: e.message };
+      } finally {
+        this.enviando = false;
+      }
+    },
 
-async function atender(reportId) {
-  const datos = await API.get("/reportes/" + reportId);
-  reporteSeleccionado = datos.reporte;
+    salir() {
+      API.cerrarSesion();
+      this.sesionActiva = false;
+      this.detalle = null;
+      this.reportes = [];
+    },
 
-  document.getElementById("tarjeta-atencion").classList.remove("oculto");
-  document.getElementById("titulo-atencion").textContent = "Atender: " + datos.reporte.titulo;
-  document.getElementById("nuevo-estado").value = datos.reporte.estado;
-  document.getElementById("detalle-admin").innerHTML = `
-    <p class="paso">Folio ${datos.reporte.reportId} · ${escapar(datos.reporte.categoria)} ·
-      ${datos.reporte.confirmaciones} confirmaciones · reportado por ${escapar(datos.reporte.autorNombre)}</p>
-    <p>${escapar(datos.reporte.descripcion)}</p>
-    ${datos.reporte.foto ? `<img src="${datos.reporte.foto}" style="max-width:320px;border-radius:8px">` : ""}
-    <div>${datos.historial.map((h) => `<div class="paso">${fecha(h.creadoEn)} · <strong>${h.estado}</strong> — ${escapar(h.mensaje)}</div>`).join("")}</div>`;
-  document.getElementById("tarjeta-atencion").scrollIntoView({ behavior: "smooth" });
-}
+    // ---------------------------------------------------------- bandeja
+    filtrar(estado) {
+      this.filtroEstado = estado;
+      this.cargarBandeja();
+    },
 
-async function publicarActualizacion() {
-  if (!reporteSeleccionado) return;
-  const boton = document.getElementById("btn-actualizar");
-  try {
-    boton.disabled = true;
-    boton.textContent = "Publicando...";
-    const estado = document.getElementById("nuevo-estado").value;
-    const archivo = document.getElementById("evidencia").files[0];
+    async cargarBandeja() {
+      this.cargando = true;
+      this.avisoBandeja = null;
+      const consulta = this.filtroEstado
+        ? "?estado=" + encodeURIComponent(this.filtroEstado)
+        : "";
+      try {
+        const datos = await API.get("/admin/reportes" + consulta);
+        this.reportes = datos.reportes;
+        this.resumen = datos.resumen;
+        // El total no cambia con el filtro: sale de la suma del resumen.
+        this.total = Object.values(datos.resumen).reduce((a, b) => a + b, 0);
+      } catch (e) {
+        this.avisoBandeja = { tipo: "error", texto: e.message };
+      } finally {
+        this.cargando = false;
+      }
+    },
 
-    if (estado === "Resuelto" && !archivo) {
-      throw new Error("Para cerrar el reporte debes adjuntar la evidencia de la solución");
-    }
-    const evidenciaKey = await API.subirImagen(archivo, "/admin/evidencias");
+    // --------------------------------------------------------- atención
+    async atender(reportId) {
+      this.avisoAtencion = null;
+      this.respuesta = "";
+      this.archivoEvidencia = null;
+      try {
+        this.detalle = await API.get("/reportes/" + reportId);
+        this.nuevoEstado = this.detalle.reporte.estado;
+      } catch (e) {
+        this.avisoBandeja = { tipo: "error", texto: e.message };
+      }
+    },
 
-    await API.patch("/admin/reportes/" + reporteSeleccionado.reportId + "/estado", {
-      estado: estado,
-      respuesta: document.getElementById("respuesta").value,
-      evidenciaKey: evidenciaKey,
-    });
+    cerrarAtencion() {
+      this.detalle = null;
+    },
 
-    mostrarAviso("aviso-admin", "Actualización publicada. Se notificó al ciudadano y a quienes confirmaron el reporte.", "ok");
-    document.getElementById("respuesta").value = "";
-    document.getElementById("evidencia").value = "";
-    cargarBandeja();
-  } catch (e) {
-    mostrarAviso("aviso-admin", e.message, "error");
-  } finally {
-    boton.disabled = false;
-    boton.textContent = "Publicar actualización";
-  }
-}
+    async publicar() {
+      this.avisoAtencion = null;
+      if (this.nuevoEstado === "Resuelto" && !this.archivoEvidencia
+          && !this.detalle.reporte.evidencia) {
+        this.avisoAtencion = {
+          tipo: "error",
+          texto: "Para cerrar el reporte falta adjuntar la evidencia de la solución.",
+        };
+        return;
+      }
 
-function escapar(texto) {
-  const div = document.createElement("div");
-  div.textContent = texto == null ? "" : texto;
-  return div.innerHTML;
-}
+      this.publicando = true;
+      try {
+        const evidenciaKey = await API.subirImagen(this.archivoEvidencia, "/admin/evidencias");
+        await API.patch("/admin/reportes/" + this.detalle.reporte.reportId + "/estado", {
+          estado: this.nuevoEstado,
+          respuesta: this.respuesta,
+          evidenciaKey,
+        });
+
+        this.avisoAtencion = {
+          tipo: "ok",
+          texto: "Actualización publicada. Se notificó a quien reportó y a quienes lo confirmaron.",
+        };
+        this.respuesta = "";
+        this.archivoEvidencia = null;
+        await this.cargarBandeja();
+        this.detalle = await API.get("/reportes/" + this.detalle.reporte.reportId);
+      } catch (e) {
+        this.avisoAtencion = { tipo: "error", texto: e.message };
+      } finally {
+        this.publicando = false;
+      }
+    },
+  },
+}).mount("#app");

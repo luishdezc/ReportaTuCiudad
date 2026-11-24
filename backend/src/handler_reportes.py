@@ -1,12 +1,11 @@
 """Lambda de reportes: alta, consulta en el mapa y URLs de carga de fotos."""
-from boto3.dynamodb.conditions import Key
-
 import common as c
+from boto3.dynamodb.conditions import Key
 
 
 def url_de_carga(evento):
     """Devuelve una URL prefirmada para que el navegador suba la foto directo a S3."""
-    sesion = c.usuario_actual(evento)
+    sesion = c.usuario_actual(evento)   
     datos = c.cuerpo_json(evento)
     tipo = datos.get("contentType", "image/jpeg")
     if tipo not in ("image/jpeg", "image/png", "image/webp"):
@@ -26,7 +25,7 @@ def crear(evento):
         lat = round(float(datos["lat"]), 6)
         lng = round(float(datos["lng"]), 6)
     except (KeyError, TypeError, ValueError):
-        raise c.ErrorHttp(400, "Debes marcar la ubicacion del problema en el mapa")
+        raise c.ErrorHttp(400, "Debes marcar la ubicacion del problema en el mapa") from None
 
     reporte = {
         "reportId": c.nuevo_id("rep"),
@@ -41,22 +40,25 @@ def crear(evento):
         "autorId": sesion["sub"],
         "autorNombre": sesion.get("nombre", ""),
         "autorEmail": sesion["email"],
+        "autorColonia": sesion.get("colonia", ""),
         "confirmaciones": 0,
         "comentarios": 0,
+        "seguidores": 0,
         "validacionesSi": 0,
         "validacionesNo": 0,
         "creadoEn": c.ahora(),
         "actualizadoEn": c.ahora(),
     }
     c.reportes.put_item(Item=reporte)
+    marca = c.ahora_preciso()
     c.interacciones.put_item(Item={
         "reportId": reporte["reportId"],
-        "sk": "HIST#%s" % reporte["creadoEn"],
+        "sk": "HIST#%s" % marca,
         "tipo": "historial",
         "estado": "Reportado",
         "mensaje": "Reporte recibido por la plataforma",
         "autor": "Sistema",
-        "creadoEn": reporte["creadoEn"],
+        "creadoEn": marca,
     })
     c.publicar_evento("reporte.creado", {
         "reportId": reporte["reportId"],
@@ -65,6 +67,15 @@ def crear(evento):
         "estado": reporte["estado"],
         "destinatarios": [reporte["autorEmail"]],
     })
+
+    # Capa comunitaria y observabilidad
+    c.registrar_actividad("reporte.creado", dict(reporte, actor=reporte["autorNombre"]))
+    c.sumar_totales(**{
+        "reportesCreados": 1,
+        "cat_" + reporte["categoria"].replace(" ", "_"): 1,
+    })
+    c.metrica("ReportesCreados", dimensiones={"Categoria": reporte["categoria"]})
+
     return c.respuesta(201, {"reporte": _salida(reporte)})
 
 
@@ -73,7 +84,16 @@ def listar(evento):
     estado = parametros.get("estado")
     limite = min(int(parametros.get("limite", 100)), 200)
 
-    if estado:
+    if parametros.get("mios") == "1":
+        # Los reportes propios salen del indice por autor: una consulta, sin Scan.
+        sesion = c.usuario_actual(evento)
+        resultado = c.reportes.query(
+            IndexName="autor-index",
+            KeyConditionExpression=Key("autorId").eq(sesion["sub"]),
+            ScanIndexForward=False,
+            Limit=limite,
+        )
+    elif estado:
         resultado = c.reportes.query(
             IndexName="estado-index",
             KeyConditionExpression=Key("estado").eq(estado),
@@ -86,9 +106,6 @@ def listar(evento):
     items = [_salida(r) for r in resultado.get("Items", [])]
     if parametros.get("categoria"):
         items = [r for r in items if r["categoria"] == parametros["categoria"]]
-    if parametros.get("mios") == "1":
-        sesion = c.usuario_actual(evento)
-        items = [r for r in items if r["autorId"] == sesion["sub"]]
     items.sort(key=lambda r: r["creadoEn"], reverse=True)
     return c.respuesta(200, {"total": len(items), "reportes": items})
 
@@ -109,6 +126,7 @@ def detalle(evento):
         [i for i in relacionadas if i["tipo"] == "historial"], key=lambda i: i["creadoEn"]
     )
     confirmadores = [i["userId"] for i in relacionadas if i["tipo"] == "confirmacion"]
+    seguidores = [i["userId"] for i in relacionadas if i["tipo"] == "seguidor"]
     return c.respuesta(200, {
         "reporte": _salida(item),
         "comentarios": [
@@ -122,6 +140,7 @@ def detalle(evento):
             for i in historial
         ],
         "confirmadores": confirmadores,
+        "seguidores": seguidores,
     })
 
 
@@ -142,6 +161,8 @@ def _salida(reporte):
         "autorNombre": reporte.get("autorNombre", ""),
         "confirmaciones": int(reporte.get("confirmaciones", 0)),
         "comentarios": int(reporte.get("comentarios", 0)),
+        "seguidores": int(reporte.get("seguidores", 0)),
+        "autorColonia": reporte.get("autorColonia", ""),
         "validacionesSi": int(reporte.get("validacionesSi", 0)),
         "validacionesNo": int(reporte.get("validacionesNo", 0)),
         "creadoEn": reporte["creadoEn"],

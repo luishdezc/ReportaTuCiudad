@@ -51,6 +51,8 @@ data "aws_iam_policy_document" "lambda_api" {
       "${aws_dynamodb_table.reportes.arn}/index/*",
       aws_dynamodb_table.interacciones.arn,
       "${aws_dynamodb_table.interacciones.arn}/index/*",
+      aws_dynamodb_table.notificaciones.arn,
+      aws_dynamodb_table.actividad.arn,
     ]
   }
 

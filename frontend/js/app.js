@@ -1,285 +1,456 @@
-/* Vista del ciudadano: mapa, alta de reportes, confirmaciones y comentarios */
+/* Vista del ciudadano: mapa, alta de reportes, confirmaciones y comentarios.
+   Vue 3 en su compilación global (sin paso de construcción: el sitio se sirve
+   como archivos estáticos desde S3). */
 
-const ESTADOS = ["Reportado", "En revisión", "Asignado", "En proceso", "Resuelto"];
-const CATEGORIAS = ["Bache", "Luminaria dañada", "Acumulación de basura", "Fuga de agua",
-                    "Árbol caído", "Semáforo dañado", "Otro"];
+const { createApp } = Vue;
 
-let mapa, capaMarcadores, marcadorNuevo = null, coordenadas = null, reportesCargados = [];
+createApp({
+  data() {
+    return {
+      estados: ESTADOS,
+      categorias: CATEGORIAS,
 
-document.addEventListener("DOMContentLoaded", () => {
-  llenarSelect("rep-categoria", CATEGORIAS, false);
-  llenarSelect("filtro-categoria", CATEGORIAS, true);
-  llenarSelect("filtro-estado", ESTADOS, true);
-  iniciarMapa();
-  pintarSesion();
-  cargarReportes();
+      usuario: API.usuario(),
+      reportes: [],
+      cargando: true,
+      errorCarga: "",
 
-  document.getElementById("btn-login").onclick = iniciarSesion;
-  document.getElementById("btn-registro").onclick = registrarse;
-  document.getElementById("btn-crear").onclick = crearReporte;
-  document.getElementById("btn-filtrar").onclick = cargarReportes;
-  document.getElementById("salir").onclick = (e) => { e.preventDefault(); API.cerrarSesion(); location.reload(); };
-  document.getElementById("btn-ir-registro").onclick = () => alternarFormularios(true);
-  document.getElementById("btn-ir-login").onclick = () => alternarFormularios(false);
-});
+      filtroEstado: "",
+      filtroCategoria: "",
+      seleccionado: null,
 
-function llenarSelect(id, valores, conTodos) {
-  const select = document.getElementById(id);
-  if (!select) return;
-  if (conTodos && !select.options.length) select.innerHTML = "<option value=''>Todos</option>";
-  valores.forEach((v) => {
-    const opcion = document.createElement("option");
-    opcion.value = v;
-    opcion.textContent = v;
-    select.appendChild(opcion);
-  });
-}
+      detalle: null,
+      comentario: "",
+      avisoDetalle: null,
 
-function alternarFormularios(mostrarRegistro) {
-  document.getElementById("formulario-registro").classList.toggle("oculto", !mostrarRegistro);
-  document.getElementById("formulario-login").classList.toggle("oculto", mostrarRegistro);
-}
+      pestana: "mapa",
+      actividad: [],
+      estadisticas: null,
+      avisos: [],
+      sinLeer: 0,
+      avisosAbierto: false,
+      perfil: null,
 
-/* ------------------------------------------------------------------ mapa */
-function iniciarMapa() {
-  mapa = L.map("mapa").setView([20.6597, -103.3496], 13); // Guadalajara por defecto
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap",
-  }).addTo(mapa);
-  capaMarcadores = L.layerGroup().addTo(mapa);
+      marcando: false,
+      formAbierto: false,
+      enviando: false,
+      avisoForma: null,
+      forma: this.formaVacia(),
 
-  mapa.on("click", (evento) => {
-    if (!API.token()) return;
-    coordenadas = { lat: evento.latlng.lat, lng: evento.latlng.lng };
-    document.getElementById("rep-coords").value =
-      coordenadas.lat.toFixed(5) + ", " + coordenadas.lng.toFixed(5);
-    if (marcadorNuevo) mapa.removeLayer(marcadorNuevo);
-    marcadorNuevo = L.marker([coordenadas.lat, coordenadas.lng]).addTo(mapa)
-      .bindPopup("Ubicación del nuevo reporte").openPopup();
-  });
+      sesionAbierta: false,
+      modoRegistro: false,
+      credenciales: { nombre: "", colonia: "", email: "", password: "" },
+      avisoSesion: null,
+    };
+  },
 
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => mapa.setView([pos.coords.latitude, pos.coords.longitude], 15),
-      () => {}
-    );
-  }
-}
+  computed: {
+    textoConteo() {
+      if (this.cargando) return "";
+      const n = this.reportes.length;
+      return n === 1 ? "1 reporte" : n + " reportes";
+    },
 
-/* --------------------------------------------------------------- sesión */
-function pintarSesion() {
-  const usuario = API.usuario();
-  document.getElementById("salir").classList.toggle("oculto", !usuario);
-  document.getElementById("tarjeta-reporte").classList.toggle("oculto", !usuario);
-  document.getElementById("tarjeta-sesion").classList.toggle("oculto", !!usuario);
-}
+    indiceEstado() {
+      return this.detalle ? ESTADOS.indexOf(this.detalle.reporte.estado) : -1;
+    },
 
-async function iniciarSesion() {
-  try {
-    const datos = await API.post("/auth/login", {
-      email: document.getElementById("login-email").value,
-      password: document.getElementById("login-password").value,
-    });
-    API.guardarSesion(datos.token, datos.usuario);
-    pintarSesion();
-    cargarReportes();
-    mostrarAviso("aviso-sesion", "Bienvenido, " + datos.usuario.nombre, "ok");
-  } catch (e) {
-    mostrarAviso("aviso-sesion", e.message, "error");
-  }
-}
+    yaConfirme() {
+      return !!(this.usuario && this.detalle &&
+        this.detalle.confirmadores.includes(this.usuario.userId));
+    },
 
-async function registrarse() {
-  try {
-    const datos = await API.post("/auth/registro", {
-      nombre: document.getElementById("reg-nombre").value,
-      email: document.getElementById("reg-email").value,
-      colonia: document.getElementById("reg-colonia").value,
-      password: document.getElementById("reg-password").value,
-    });
-    API.guardarSesion(datos.token, datos.usuario);
-    pintarSesion();
-    mostrarAviso("aviso-sesion", "Cuenta creada. Ya puedes reportar.", "ok");
-  } catch (e) {
-    mostrarAviso("aviso-sesion", e.message, "error");
-  }
-}
+    puedeConfirmar() {
+      if (!this.usuario || !this.detalle) return false;
+      return this.detalle.reporte.autorId !== this.usuario.userId && !this.yaConfirme;
+    },
 
-/* -------------------------------------------------------------- reportes */
-async function crearReporte() {
-  const boton = document.getElementById("btn-crear");
-  try {
-    if (!coordenadas) throw new Error("Marca la ubicación del problema en el mapa");
-    boton.disabled = true;
-    boton.textContent = "Enviando...";
+    sigoEsto() {
+      return !!(this.usuario && this.detalle &&
+        this.detalle.seguidores.includes(this.usuario.userId));
+    },
 
-    const archivo = document.getElementById("rep-foto").files[0];
-    const fotoKey = await API.subirImagen(archivo, "/reportes/carga");
+    categoriasOrdenadas() {
+      if (!this.estadisticas) return [];
+      const entradas = Object.entries(this.estadisticas.porCategoria || {});
+      if (!entradas.length) return [];
+      const mayor = Math.max(...entradas.map((e) => e[1]));
+      return entradas
+        .sort((a, b) => b[1] - a[1])
+        .map(([nombre, total]) => ({
+          nombre,
+          total,
+          ancho: Math.round((total / mayor) * 100),
+        }));
+    },
+  },
 
-    const datos = await API.post("/reportes", {
-      titulo: document.getElementById("rep-titulo").value,
-      categoria: document.getElementById("rep-categoria").value,
-      descripcion: document.getElementById("rep-descripcion").value,
-      direccion: document.getElementById("rep-direccion").value,
-      lat: coordenadas.lat,
-      lng: coordenadas.lng,
-      fotoKey: fotoKey,
-    });
+  watch: {
+    /* Mientras el muro o el tablero ocupan el ancho completo, el mapa
+       queda oculto y Leaflet pierde la medida del contenedor. Al
+       volver hay que decirle que la recalcule o se dibuja cortado. */
+    pestana(nueva) {
+      if (nueva !== "mapa" || !this.mapa) return;
+      this.$nextTick(() => this.mapa.invalidateSize());
+    },
+  },
 
-    mostrarAviso("aviso-reporte",
-      "Reporte enviado con folio " + datos.reporte.reportId + ". Recibirás un correo con las actualizaciones.", "ok");
-    ["rep-titulo", "rep-descripcion", "rep-direccion", "rep-coords"].forEach((id) => {
-      document.getElementById(id).value = "";
-    });
-    document.getElementById("rep-foto").value = "";
-    if (marcadorNuevo) mapa.removeLayer(marcadorNuevo);
-    coordenadas = null;
-    cargarReportes();
-  } catch (e) {
-    mostrarAviso("aviso-reporte", e.message, "error");
-  } finally {
-    boton.disabled = false;
-    boton.textContent = "Enviar reporte";
-  }
-}
+  mounted() {
+    this.iniciarMapa();
+    this.cargarReportes();
+    if (this.usuario) this.cargarAvisos();
+  },
 
-async function cargarReportes() {
-  const parametros = new URLSearchParams();
-  const estado = document.getElementById("filtro-estado").value;
-  const categoria = document.getElementById("filtro-categoria").value;
-  if (estado) parametros.set("estado", estado);
-  if (categoria) parametros.set("categoria", categoria);
+  methods: {
+    claseEstado,
+    fecha,
+    hace,
+    iconoCategoria,
+    iconoEstado,
 
-  try {
-    const datos = await API.get("/reportes?" + parametros.toString());
-    reportesCargados = datos.reportes;
-    document.getElementById("titulo-lista").textContent =
-      "Reportes de la zona (" + datos.total + ")";
-    pintarMarcadores(datos.reportes);
-    pintarLista(datos.reportes);
-  } catch (e) {
-    document.getElementById("lista-reportes").innerHTML =
-      "<p class='aviso error'>" + e.message + "</p>";
-  }
-}
+    /* Porcentaje acotado a 100, para las barras de avance. */
+    porcentaje(parte, total) {
+      if (!total) return 0;
+      return Math.min(100, Math.round((parte / total) * 100));
+    },
 
-function pintarMarcadores(reportes) {
-  capaMarcadores.clearLayers();
-  reportes.forEach((r) => {
-    const marcador = L.marker([r.lat, r.lng]).addTo(capaMarcadores);
-    marcador.bindPopup(
-      "<strong>" + r.titulo + "</strong><br>" + r.categoria +
-      "<br><span class='" + claseEstado(r.estado) + "'>" + r.estado + "</span>" +
-      "<br>" + r.confirmaciones + " confirmaciones"
-    );
-    marcador.on("click", () => verDetalle(r.reportId));
-  });
-}
+    /* Icono del movimiento en el muro de la ciudad. */
+    iconoEvento(evento) {
+      const iconos = {
+        "reporte.creado": "megafono",
+        "reporte.confirmado": "pulgar",
+        "reporte.reabierto": "pulgar-abajo",
+      };
+      if (iconos[evento.tipo]) return iconos[evento.tipo];
+      return iconoEstado(evento.estado);
+    },
 
-function pintarLista(reportes) {
-  const contenedor = document.getElementById("lista-reportes");
-  if (!reportes.length) {
-    contenedor.innerHTML = "<p class='paso'>Todavía no hay reportes con esos filtros.</p>";
-    return;
-  }
-  contenedor.innerHTML = reportes.map((r) => `
-    <div class="reporte">
-      <h3>${escapar(r.titulo)}</h3>
-      <div class="meta">
-        <span class="${claseEstado(r.estado)}">${r.estado}</span>
-        <span>${escapar(r.categoria)}</span>
-        <span>${r.confirmaciones} confirmaciones</span>
-        <span>${r.comentarios} comentarios</span>
-        <span>${fecha(r.creadoEn)}</span>
-      </div>
-      <button class="pequeno secundario" onclick="verDetalle('${r.reportId}')">Ver detalle</button>
-    </div>`).join("");
-}
+    /* Icono de cada insignia del perfil. */
+    iconoInsignia(clave) {
+      return {
+        primer_reporte: "bandera",
+        vigilante: "ojo",
+        cronista: "megafono",
+        respaldo: "pulgar",
+        conversador: "comentario",
+        resolutivo: "listo",
+      }[clave] || "insignia";
+    },
 
-/* --------------------------------------------------------------- detalle */
-async function verDetalle(reportId) {
-  const tarjeta = document.getElementById("tarjeta-detalle");
-  tarjeta.classList.remove("oculto");
-  const caja = document.getElementById("detalle");
-  caja.innerHTML = "<p class='paso'>Cargando...</p>";
+    formaVacia() {
+      return {
+        titulo: "", categoria: CATEGORIAS[0], direccion: "", descripcion: "",
+        archivo: null, lat: null, lng: null,
+      };
+    },
 
-  try {
-    const datos = await API.get("/reportes/" + reportId);
-    const r = datos.reporte;
-    const usuario = API.usuario();
-    const esAutor = usuario && usuario.userId === r.autorId;
-    const yaConfirmo = usuario && datos.confirmadores.includes(usuario.userId);
+    // ------------------------------------------------------------- mapa
+    iniciarMapa() {
+      this.mapa = L.map("mapa", { zoomControl: true }).setView([20.6597, -103.3496], 13);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap",
+      }).addTo(this.mapa);
+      this.capa = L.layerGroup().addTo(this.mapa);
 
-    caja.innerHTML = `
-      <h3>${escapar(r.titulo)} <span class="${claseEstado(r.estado)}">${r.estado}</span></h3>
-      <p class="paso">Folio ${r.reportId} · ${escapar(r.categoria)} · ${escapar(r.direccion || "sin referencia")} · ${fecha(r.creadoEn)}</p>
-      <p>${escapar(r.descripcion)}</p>
-      ${r.foto ? `<img src="${r.foto}" alt="Fotografía del reporte">` : ""}
-      ${r.respuestaMunicipal ? `<div class="comentario oficial"><strong>Cuenta municipal:</strong> ${escapar(r.respuestaMunicipal)}</div>` : ""}
-      ${r.evidencia ? `<p class="paso">Evidencia de la solución:</p><img src="${r.evidencia}" alt="Evidencia">` : ""}
+      this.mapa.on("click", (evento) => {
+        if (!this.marcando) return;
+        this.forma.lat = evento.latlng.lat;
+        this.forma.lng = evento.latlng.lng;
+        if (this.marcadorNuevo) this.mapa.removeLayer(this.marcadorNuevo);
+        this.marcadorNuevo = L.marker(evento.latlng, {
+          icon: L.divIcon({
+            className: "marcador-rtc",
+            html: '<span class="pin pin-reportado">' +
+                  '<svg class="ico"><use href="#i-mas"></use></svg></span>',
+            iconSize: [32, 32],
+            iconAnchor: [16, 30],
+          }),
+        }).addTo(this.mapa);
+        this.marcando = false;
+        this.formAbierto = true;
+      });
 
-      <h3 style="margin-top:14px">Seguimiento</h3>
-      ${datos.historial.map((h) => `<div class="paso">${fecha(h.creadoEn)} · <strong>${h.estado}</strong> — ${escapar(h.mensaje)}</div>`).join("")}
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => this.mapa.setView([pos.coords.latitude, pos.coords.longitude], 15),
+          () => {}
+        );
+      }
+    },
 
-      <h3 style="margin-top:14px">Comentarios (${datos.comentarios.length})</h3>
-      ${datos.comentarios.map((cm) => `
-        <div class="comentario ${cm.oficial ? "oficial" : ""}">
-          <strong>${escapar(cm.autor || "Ciudadano")}${cm.oficial ? " (municipio)" : ""}:</strong>
-          ${escapar(cm.texto)}<br><span class="paso">${fecha(cm.creadoEn)}</span>
-        </div>`).join("") || "<p class='paso'>Sé el primero en comentar.</p>"}
+    /* El pin por omisión de Leaflet es una gota azul igual para todo.
+       El nuestro lleva el icono de la categoría y el color del estado,
+       así el mapa se lee sin abrir un solo reporte. */
+    pinDe(reporte) {
+      return L.divIcon({
+        className: "marcador-rtc",
+        html: '<span class="pin ' + claseEstado(reporte.estado).split(" ")[1].replace("estado-", "pin-") + '">' +
+              '<svg class="ico"><use href="#i-' + iconoCategoria(reporte.categoria) + '"></use></svg>' +
+              "</span>",
+        iconSize: [32, 32],
+        iconAnchor: [16, 30],
+        popupAnchor: [0, -28],
+      });
+    },
 
-      ${usuario ? `
-        <textarea id="nuevo-comentario" placeholder="Escribe un comentario"></textarea>
-        <button class="pequeno" onclick="comentar('${r.reportId}')">Comentar</button>
-        ${!esAutor && !yaConfirmo ? `<button class="pequeno secundario" onclick="confirmar('${r.reportId}')">Yo también lo vi (${r.confirmaciones})</button>` : ""}
-        ${r.estado === "Resuelto" ? `
-          <p class="paso" style="margin-top:12px">¿El problema realmente quedó solucionado?</p>
-          <button class="pequeno" onclick="validar('${r.reportId}', true)">Sí, quedó resuelto</button>
-          <button class="pequeno secundario" onclick="validar('${r.reportId}', false)">No, sigue igual</button>` : ""}
-      ` : "<p class='paso'>Inicia sesión para confirmar o comentar.</p>"}
-      <div id="aviso-detalle" class="aviso oculto"></div>`;
+    pintarMarcadores() {
+      this.capa.clearLayers();
+      this.reportes.forEach((r) => {
+        const marcador = L.marker([r.lat, r.lng], { icon: this.pinDe(r) }).addTo(this.capa);
+        marcador.bindPopup(
+          "<h4>" + this.escapar(r.titulo) + "</h4>" +
+          "<p style='margin:0'>" + this.escapar(r.categoria) + " — " + this.escapar(r.estado) + "</p>" +
+          "<p style='margin:.2rem 0 0'>" + r.confirmaciones + " confirman</p>"
+        );
+        marcador.on("click", () => this.verDetalle(r.reportId));
+      });
+    },
 
-    tarjeta.scrollIntoView({ behavior: "smooth", block: "start" });
-  } catch (e) {
-    caja.innerHTML = "<p class='aviso error'>" + e.message + "</p>";
-  }
-}
+    escapar(texto) {
+      const div = document.createElement("div");
+      div.textContent = texto == null ? "" : texto;
+      return div.innerHTML;
+    },
 
-async function confirmar(reportId) {
-  try {
-    await API.post("/reportes/" + reportId + "/confirmaciones", {});
-    await cargarReportes();
-    verDetalle(reportId);
-  } catch (e) {
-    mostrarAviso("aviso-detalle", e.message, "error");
-  }
-}
+    // --------------------------------------------------------- reportes
+    async cargarReportes() {
+      this.cargando = true;
+      this.errorCarga = "";
+      const parametros = new URLSearchParams();
+      if (this.filtroEstado) parametros.set("estado", this.filtroEstado);
+      if (this.filtroCategoria) parametros.set("categoria", this.filtroCategoria);
 
-async function comentar(reportId) {
-  const texto = document.getElementById("nuevo-comentario").value.trim();
-  if (!texto) return;
-  try {
-    await API.post("/reportes/" + reportId + "/comentarios", { texto });
-    verDetalle(reportId);
-  } catch (e) {
-    mostrarAviso("aviso-detalle", e.message, "error");
-  }
-}
+      try {
+        const datos = await API.get("/reportes?" + parametros.toString());
+        this.reportes = datos.reportes;
+        this.pintarMarcadores();
+      } catch (e) {
+        this.errorCarga = e.message;
+      } finally {
+        this.cargando = false;
+      }
+    },
 
-async function validar(reportId, resuelto) {
-  try {
-    const datos = await API.post("/reportes/" + reportId + "/validacion", { resuelto });
-    mostrarAviso("aviso-detalle",
-      datos.reabierto ? "Gracias. El reporte se reabrió para revisión." : "Gracias por confirmar.", "ok");
-    await cargarReportes();
-  } catch (e) {
-    mostrarAviso("aviso-detalle", e.message, "error");
-  }
-}
+    iniciarReporte() {
+      if (!this.usuario) {
+        this.abrirSesion();
+        return;
+      }
+      if (this.forma.lat) {
+        this.formAbierto = true;
+      } else {
+        this.marcando = true;
+      }
+    },
 
-function escapar(texto) {
-  const div = document.createElement("div");
-  div.textContent = texto == null ? "" : texto;
-  return div.innerHTML;
-}
+    async crearReporte() {
+      this.avisoForma = null;
+      if (!this.forma.lat) {
+        this.avisoForma = { tipo: "error", texto: "Falta marcar la ubicación en el mapa." };
+        return;
+      }
+      this.enviando = true;
+      try {
+        const fotoKey = await API.subirImagen(this.forma.archivo, "/reportes/carga");
+        const datos = await API.post("/reportes", {
+          titulo: this.forma.titulo,
+          categoria: this.forma.categoria,
+          descripcion: this.forma.descripcion,
+          direccion: this.forma.direccion,
+          lat: this.forma.lat,
+          lng: this.forma.lng,
+          fotoKey,
+        });
+
+        this.formAbierto = false;
+        if (this.marcadorNuevo) this.mapa.removeLayer(this.marcadorNuevo);
+        this.forma = this.formaVacia();
+        await this.cargarReportes();
+        await this.verDetalle(datos.reporte.reportId);
+        this.avisoDetalle = {
+          tipo: "ok",
+          texto: "Reporte recibido. Te avisaremos por correo cada vez que cambie de estado.",
+        };
+      } catch (e) {
+        this.avisoForma = { tipo: "error", texto: e.message };
+      } finally {
+        this.enviando = false;
+      }
+    },
+
+    // ---------------------------------------------------------- detalle
+    async verDetalle(reportId) {
+      this.perfil = null;
+      this.seleccionado = reportId;
+      this.avisoDetalle = null;
+      this.comentario = "";
+      try {
+        this.detalle = await API.get("/reportes/" + reportId);
+      } catch (e) {
+        this.avisoDetalle = { tipo: "error", texto: e.message };
+      }
+    },
+
+    // ------------------------------------------- comunidad y estadísticas
+    async verActividad() {
+      this.pestana = "actividad";
+      try {
+        const datos = await API.get("/actividad?limite=40");
+        this.actividad = datos.eventos;
+      } catch (e) {
+        this.errorCarga = e.message;
+      }
+    },
+
+    async verEstadisticas() {
+      this.pestana = "ciudad";
+      try {
+        this.estadisticas = await API.get("/estadisticas");
+      } catch (e) {
+        this.errorCarga = e.message;
+      }
+    },
+
+    verboEvento(evento) {
+      const verbos = {
+        "reporte.creado": "Alguien levantó un reporte",
+        "reporte.confirmado": evento.actor + " confirmó un reporte",
+        "reporte.estado": "El municipio lo movió a " + evento.estado,
+        "reporte.reabierto": "La comunidad lo reabrió",
+      };
+      return verbos[evento.tipo] || "Movimiento en un reporte";
+    },
+
+    claseEvento(evento) {
+      if (evento.tipo === "reporte.creado") return "creado";
+      if (evento.tipo === "reporte.confirmado") return "confirmado";
+      if (evento.tipo === "reporte.reabierto") return "reabierto";
+      return evento.estado === "Resuelto" ? "resuelto" : "estado";
+    },
+
+    // ------------------------------------------------------------ perfil
+    async verPerfil(userId) {
+      if (!userId) return;
+      try {
+        this.perfil = await API.get("/usuarios/" + userId + "/perfil");
+        this.avisosAbierto = false;
+      } catch (e) {
+        this.avisoDetalle = { tipo: "error", texto: e.message };
+      }
+    },
+
+    // ------------------------------------------------------------ avisos
+    async cargarAvisos() {
+      try {
+        const datos = await API.get("/notificaciones");
+        this.avisos = datos.notificaciones;
+        this.sinLeer = datos.sinLeer;
+      } catch (e) {
+        // Los avisos no deben tumbar la vista principal si fallan.
+        this.avisos = [];
+      }
+    },
+
+    abrirAvisos() {
+      this.avisosAbierto = true;
+      this.cargarAvisos();
+    },
+
+    async marcarLeidos() {
+      try {
+        await API.post("/notificaciones/leidas", {});
+        await this.cargarAvisos();
+      } catch (e) {
+        this.avisoDetalle = { tipo: "error", texto: e.message };
+      }
+    },
+
+    irA(aviso) {
+      this.avisosAbierto = false;
+      if (aviso.reportId) this.verDetalle(aviso.reportId);
+    },
+
+    // ---------------------------------------------------- seguir reportes
+    async alternarSeguir() {
+      const ruta = "/reportes/" + this.detalle.reporte.reportId + "/seguidores";
+      try {
+        await API.peticion(this.sigoEsto ? "DELETE" : "POST", ruta, {});
+        await this.verDetalle(this.detalle.reporte.reportId);
+      } catch (e) {
+        this.avisoDetalle = { tipo: "error", texto: e.message };
+      }
+    },
+
+    async confirmar() {
+      try {
+        await API.post("/reportes/" + this.detalle.reporte.reportId + "/confirmaciones", {});
+        await this.cargarReportes();
+        await this.verDetalle(this.detalle.reporte.reportId);
+      } catch (e) {
+        this.avisoDetalle = { tipo: "error", texto: e.message };
+      }
+    },
+
+    async comentar() {
+      const texto = this.comentario.trim();
+      if (!texto) return;
+      try {
+        await API.post("/reportes/" + this.detalle.reporte.reportId + "/comentarios", { texto });
+        await this.verDetalle(this.detalle.reporte.reportId);
+      } catch (e) {
+        this.avisoDetalle = { tipo: "error", texto: e.message };
+      }
+    },
+
+    async validar(resuelto) {
+      try {
+        const datos = await API.post(
+          "/reportes/" + this.detalle.reporte.reportId + "/validacion", { resuelto });
+        await this.cargarReportes();
+        await this.verDetalle(this.seleccionado);
+        this.avisoDetalle = {
+          tipo: "ok",
+          texto: datos.reabierto
+            ? "Gracias. El reporte volvió a revisión porque varios dicen que el problema sigue."
+            : "Gracias por confirmarlo.",
+        };
+      } catch (e) {
+        this.avisoDetalle = { tipo: "error", texto: e.message };
+      }
+    },
+
+    // ----------------------------------------------------------- sesión
+    abrirSesion() {
+      this.avisoSesion = null;
+      this.sesionAbierta = true;
+    },
+
+    async entrar() {
+      this.enviando = true;
+      this.avisoSesion = null;
+      try {
+        const ruta = this.modoRegistro ? "/auth/registro" : "/auth/login";
+        const datos = await API.post(ruta, this.credenciales);
+        API.guardarSesion(datos.token, datos.usuario);
+        this.usuario = datos.usuario;
+        this.sesionAbierta = false;
+        this.credenciales = { nombre: "", colonia: "", email: "", password: "" };
+        this.cargarAvisos();
+      } catch (e) {
+        this.avisoSesion = { tipo: "error", texto: e.message };
+      } finally {
+        this.enviando = false;
+      }
+    },
+
+    salir() {
+      API.cerrarSesion();
+      this.usuario = null;
+      this.detalle = null;
+      this.perfil = null;
+      this.avisos = [];
+      this.sinLeer = 0;
+    },
+  },
+}).mount("#app");
