@@ -52,6 +52,19 @@ resource "aws_dynamodb_table" "reportes" {
     type = "S"
   }
 
+  attribute {
+    name = "autorId"
+    type = "S"
+  }
+
+  # El perfil publico de un ciudadano lista sus reportes con una sola consulta.
+  global_secondary_index {
+    name            = "autor-index"
+    hash_key        = "autorId"
+    range_key       = "creadoEn"
+    projection_type = "ALL"
+  }
+
   # Permite listar el mapa y la bandeja del municipio por estado,
   # del mas nuevo al mas viejo, sin escanear la tabla.
   global_secondary_index {
@@ -80,5 +93,62 @@ resource "aws_dynamodb_table" "interacciones" {
   attribute {
     name = "sk"
     type = "S"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Avisos dentro de la aplicacion. Caducan solos con TTL: nadie quiere ver
+# notificaciones de hace medio ano, y asi la tabla no crece sin limite.
+# ---------------------------------------------------------------------------
+resource "aws_dynamodb_table" "notificaciones" {
+  name         = "${local.nombre}-notificaciones"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "userId"
+  range_key    = "sk" # NOT#<fecha>#<id>
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expiraEn"
+    enabled        = true
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Feed de actividad de la ciudad y contadores publicos.
+#
+# Se particiona por dia (YYYY-MM-DD) en vez de usar una sola particion para
+# toda la ciudad: con una sola, todas las escrituras caerian en la misma y se
+# toparia con el limite por particion. Los contadores globales viven aparte,
+# en la particion reservada "TOTALES", que si recibe escrituras constantes
+# pero son sumas atomicas sobre un unico item.
+# ---------------------------------------------------------------------------
+resource "aws_dynamodb_table" "actividad" {
+  name         = "${local.nombre}-actividad"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "dia"
+  range_key    = "sk"
+
+  attribute {
+    name = "dia"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expiraEn"
+    enabled        = true
   }
 }

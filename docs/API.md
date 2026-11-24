@@ -28,6 +28,8 @@ Todas las respuestas son JSON en UTF-8.
 | POST | `/reportes/{id}/confirmaciones` | sí | "Yo también lo vi". Una por usuario (409 si repite). |
 | POST | `/reportes/{id}/comentarios` | sí | Comentario en el reporte (`texto`). |
 | POST | `/reportes/{id}/validacion` | sí | Valida el cierre (`resuelto: true|false`). Con 2 o más respuestas negativas mayoritarias el reporte se reabre en `En revisión`. |
+| POST | `/reportes/{id}/seguidores` | sí | Sigue el reporte para recibir sus avisos, sin afirmar que se vio (409 si ya lo sigue). |
+| DELETE | `/reportes/{id}/seguidores` | sí | Deja de seguirlo (409 si no lo seguía). |
 
 ## Panel municipal — Lambda `admin` (rol `municipio`)
 
@@ -36,6 +38,18 @@ Todas las respuestas son JSON en UTF-8.
 | GET | `/admin/reportes` | Bandeja ordenada por confirmaciones, con resumen por estado. Filtros `?estado=`, `?categoria=`. |
 | PATCH | `/admin/reportes/{id}/estado` | Cambia el estado (`estado`, `respuesta`, `evidenciaKey`). Para `Resuelto` la evidencia es obligatoria. |
 | POST | `/admin/evidencias` | URL prefirmada para subir la evidencia de la solución. |
+
+## Comunidad — Lambda `social`
+
+| Método | Ruta | Sesión | Descripción |
+|---|---|---|---|
+| GET | `/usuarios/{id}/perfil` | — | Perfil público: lo que ha aportado el ciudadano, sus insignias y sus reportes. |
+| GET | `/actividad` | — | Feed de la ciudad: qué pasó en los últimos tres días. Filtro `?limite=`. |
+| GET | `/estadisticas` | — | Números de la ciudad: altas, cierres, porcentaje resuelto, horas promedio y desglose por categoría. |
+| GET | `/notificaciones` | sí | Avisos del usuario dentro de la aplicación, con el conteo de los no leídos. |
+| POST | `/notificaciones/leidas` | sí | Marca como leídos todos sus avisos. |
+
+Las insignias se calculan al vuelo a partir de los contadores del perfil, así que no hay nada que mantener sincronizado: `primer_reporte`, `vigilante`, `cronista`, `respaldo`, `conversador` y `resolutivo`.
 
 ## Códigos de error
 

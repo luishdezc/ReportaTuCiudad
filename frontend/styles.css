@@ -1,116 +1,1229 @@
+/* ReportaTuCiudad — sistema visual
+   ===================================================================
+   La referencia es la señalética urbana y el papeleo municipal: tinta
+   azul oscura de placa de calle, ámbar de obra en vía, verde de visto
+   bueno. El folio es el corazón del producto, así que es lo único que
+   va en monoespaciada: es un número de expediente, no decoración.
+
+   Cada categoría de problema tiene color e icono propios, y ese par
+   viaja igual por toda la aplicación: el pin del mapa, la ficha de la
+   lista, la barra del tablero y el muro de la ciudad. Quien usa la
+   app aprende el código de color una vez y le sirve en todas partes.
+
+   Sin framework de CSS a propósito: el sitio se sirve como archivos
+   estáticos desde S3 sin paso de construcción, y un framework por CDN
+   dejaría la aplicación sin estilos el día que falle la red del salón.
+   =================================================================== */
+
 :root {
-  --azul: #1f4e79;
-  --azul-claro: #eaf2fb;
-  --verde: #2e8b6b;
-  --naranja: #d9822b;
-  --gris: #5b6b7a;
-  --linea: #dde3e9;
-  --tinta: #1b2733;
-  --fondo: #f5f7f9;
+  /* ----------------------------------------------------------- base */
+  --tinta: #11203a;
+  --tinta-suave: #26374f;
+  --tinta-tenue: #3d4f6b;
+  --papel: #eef1f6;
+  --papel-hondo: #e3e8f0;
+  --superficie: #ffffff;
+  --superficie-alt: #f7f9fc;
+  --apagado: #5b6a7f;
+  --apagado-claro: #8795a8;
+  --linea: #d6dde7;
+  --linea-suave: #e6ebf2;
+
+  /* --------------------------------------------------------- estado */
+  --senal: #c07d10;          /* reportado: requiere atención */
+  --senal-fondo: #fdf4e3;
+  --senal-borde: #ecd6a6;
+  --proceso: #2a6ea8;        /* en revisión, asignado, en proceso */
+  --proceso-fondo: #e8f1f8;
+  --proceso-borde: #b7d1e6;
+  --verificado: #26734f;     /* resuelto */
+  --verificado-fondo: #e7f3ec;
+  --verificado-borde: #a9d4bd;
+  --alerta: #a8332c;
+  --alerta-fondo: #fbeceb;
+  --alerta-borde: #e5b8b4;
+
+  /* ------------------------------------------ categorías de reporte */
+  --cat-bache: #b4530e;
+  --cat-luminaria: #9a7407;
+  --cat-basura: #4a7a2b;
+  --cat-agua: #1f6f93;
+  --cat-arbol: #2f7a52;
+  --cat-semaforo: #a8332c;
+  --cat-otro: #5a6b82;
+
+  /* ------------------------------------------------ forma y relieve */
+  --sombra-sutil: 0 1px 2px rgba(17, 32, 58, .06), 0 1px 3px rgba(17, 32, 58, .04);
+  --sombra-media: 0 2px 4px rgba(17, 32, 58, .06), 0 8px 20px rgba(17, 32, 58, .09);
+  --sombra-flotante: 0 10px 34px rgba(17, 32, 58, .2);
+  --radio-ficha: 6px;
+  --radio-panel: 12px;
+  --radio-chip: 999px;
+  --transicion: 140ms cubic-bezier(.3, .7, .4, 1);
 }
 
 * { box-sizing: border-box; }
 
+html, body { height: 100%; }
+
 body {
   margin: 0;
-  background: var(--fondo);
+  background: var(--papel);
   color: var(--tinta);
-  font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: Archivo, "Helvetica Neue", Arial, sans-serif;
   font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
-header.barra {
-  background: var(--azul);
+h1, h2, h3, h4 { margin: 0; letter-spacing: -0.015em; font-weight: 600; }
+p { margin: 0 0 .6rem; }
+
+.folio {
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: .75rem;
+  letter-spacing: .01em;
+  color: var(--apagado-claro);
+}
+
+/* ===================================================================
+   Iconos
+   Todos salen del sprite de js/iconos.js. Heredan el color del texto
+   y se alinean con la línea base por el margen inferior negativo.
+   =================================================================== */
+.ico {
+  width: 1.05em;
+  height: 1.05em;
+  flex-shrink: 0;
+  vertical-align: -.14em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ico-lg { width: 1.35em; height: 1.35em; }
+.ico-xl { width: 1.7em; height: 1.7em; }
+
+/* Pastilla cuadrada con el icono de la categoría dentro. Es la pieza
+   que más se repite: lista, mapa, muro, panel municipal. */
+.ico-chip {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: var(--papel);
+  color: var(--apagado);
+  border: 1px solid var(--linea-suave);
+}
+
+.ico-chip .ico { width: 19px; height: 19px; vertical-align: 0; }
+.ico-chip.menor { width: 30px; height: 30px; border-radius: 7px; }
+.ico-chip.menor .ico { width: 15px; height: 15px; }
+
+/* Un color por categoría, con su fondo al 8 %. */
+.cat-bache     { color: var(--cat-bache);     background: #fbf0e8; border-color: #f0ddcd; }
+.cat-luminaria { color: var(--cat-luminaria); background: #fbf5e4; border-color: #eee2b9; }
+.cat-basura    { color: var(--cat-basura);    background: #eff5e9; border-color: #d4e4c5; }
+.cat-agua      { color: var(--cat-agua);      background: #e9f3f8; border-color: #c2dde9; }
+.cat-arbol     { color: var(--cat-arbol);     background: #eaf4ee; border-color: #c4e0d1; }
+.cat-semaforo  { color: var(--cat-semaforo);  background: #fbecec; border-color: #ecc9c6; }
+.cat-otro      { color: var(--cat-otro);      background: #eff2f6; border-color: #d8dfe8; }
+
+/* ===================================================================
+   Barra superior
+   =================================================================== */
+.barra {
+  background: var(--tinta);
   color: #fff;
-  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .6rem 1.1rem;
+  padding: .6rem 1.25rem;
+  position: relative;
+  z-index: 600;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .06) inset, var(--sombra-sutil);
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  font-weight: 700;
+  font-size: 1.02rem;
+  letter-spacing: -0.02em;
+}
+
+/* El distintivo: una placa de calle en miniatura. */
+.marca .placa {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: linear-gradient(160deg, var(--senal), #a86a09);
+  color: var(--tinta);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.marca .placa .ico { width: 17px; height: 17px; stroke-width: 2.4; vertical-align: 0; }
+
+.barra nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .35rem;
+  font-size: .9rem;
+}
+
+.barra nav a {
+  color: #bac7d8;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .38rem .6rem;
+  border-radius: var(--radio-ficha);
+  transition: background var(--transicion), color var(--transicion);
+}
+
+.barra nav a:hover { color: #fff; background: rgba(255, 255, 255, .09); }
+.barra nav a.activo { color: #fff; background: rgba(255, 255, 255, .13); }
+
+.barra .separa {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, .16);
+  margin: 0 .25rem;
+}
+
+/* Botón de la cuenta, con la inicial del usuario. */
+.barra .yo {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  background: rgba(255, 255, 255, .09);
+  border: none;
+  color: #fff;
+  padding: .3rem .7rem .3rem .3rem;
+  border-radius: var(--radio-chip);
+  font-size: .87rem;
+  font-weight: 600;
+}
+
+.barra .yo:hover { background: rgba(255, 255, 255, .16); }
+
+.barra .yo .inicial-mini {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--senal);
+  color: var(--tinta);
+  display: grid;
+  place-items: center;
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+/* ===================================================================
+   Estructura: rail + lienzo del mapa
+   =================================================================== */
+.escenario {
+  display: grid;
+  grid-template-columns: 384px 1fr;
+  height: calc(100vh - 56px);
+}
+
+/* En Actividad y La ciudad el mapa no aporta nada, así que el
+   contenido se queda con todo el ancho en vez de competir por un
+   rail de 384 px mientras media pantalla se queda vacía. */
+.escenario.sin-mapa { grid-template-columns: 1fr; }
+.escenario.sin-mapa .lienzo { display: none; }
+
+.rail {
+  background: var(--superficie);
+  border-right: 1px solid var(--linea);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.escenario.sin-mapa .rail {
+  border-right: none;
+  background: var(--papel);
+}
+
+/* Columna legible para el contenido a ancho completo. */
+.hoja {
+  width: min(960px, 100%);
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.hoja-encabezado { margin-bottom: 1.1rem; }
+.hoja-encabezado h2 { font-size: 1.3rem; letter-spacing: -0.025em; }
+.hoja-encabezado p { color: var(--apagado); font-size: .9rem; margin: .2rem 0 0; }
+
+.lienzo { position: relative; }
+#mapa { position: absolute; inset: 0; background: var(--papel-hondo); }
+
+/* ===================================================================
+   Pestañas del rail
+   =================================================================== */
+.pestanas {
+  display: flex;
+  gap: .2rem;
+  padding: .45rem .6rem 0;
+  border-bottom: 1px solid var(--linea);
+  background: var(--superficie);
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.escenario.sin-mapa .pestanas { justify-content: center; }
+
+.pestanas button {
+  background: none;
+  border: none;
+  border-radius: var(--radio-ficha) var(--radio-ficha) 0 0;
+  color: var(--apagado);
+  font-weight: 600;
+  font-size: .88rem;
+  padding: .6rem .85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  position: relative;
+  transition: color var(--transicion), background var(--transicion);
+}
+
+.pestanas button::after {
+  content: "";
+  position: absolute;
+  left: .6rem;
+  right: .6rem;
+  bottom: -1px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background var(--transicion);
+}
+
+.pestanas button:hover { background: var(--superficie-alt); color: var(--tinta); }
+.pestanas button[aria-selected="true"] { color: var(--tinta); }
+.pestanas button[aria-selected="true"]::after { background: var(--senal); }
+
+/* ===================================================================
+   Encabezado del rail y filtros
+   =================================================================== */
+.rail-encabezado {
+  padding: .95rem 1.1rem .85rem;
+  border-bottom: 1px solid var(--linea);
+  position: sticky;
+  top: 44px;
+  background: var(--superficie);
+  z-index: 2;
+}
+
+.rail-encabezado h2 { font-size: 1.05rem; }
+
+.conteo {
+  color: var(--apagado);
+  font-size: .85rem;
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin: .1rem 0 0;
+}
+
+.filtros { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem .6rem; margin-top: .75rem; }
+.filtros label { margin: 0 0 .22rem; font-size: .76rem; color: var(--apagado); font-weight: 600; letter-spacing: .01em; }
+
+/* ===================================================================
+   Ficha de reporte
+   =================================================================== */
+.ficha {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--linea-suave);
+  padding: .85rem 1.1rem;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  position: relative;
+  transition: background var(--transicion);
+}
+
+.ficha::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: transparent;
+  transition: background var(--transicion);
+}
+
+.ficha:hover { background: var(--superficie-alt); }
+.ficha[aria-current="true"] { background: var(--superficie-alt); }
+.ficha[aria-current="true"]::before { background: var(--tinta); }
+
+.ficha-cuerpo { min-width: 0; flex: 1; }
+.ficha-cuerpo .folio, .ficha-cuerpo .meta, .ficha-cuerpo .apoyos { display: flex; }
+.ficha-cuerpo .folio { display: block; }
+.ficha h3 { font-size: .95rem; margin-bottom: .12rem; overflow-wrap: anywhere; }
+
+.ficha .meta {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: wrap;
+  margin-top: .45rem;
+}
+
+.ficha .categoria { font-size: .8rem; color: var(--apagado); }
+
+.apoyos {
+  font-size: .8rem;
+  color: var(--apagado);
+  display: flex;
+  gap: .85rem;
+  margin: .4rem 0 0;
+  flex-wrap: wrap;
+}
+
+.apoyos span { display: inline-flex; align-items: center; gap: .25rem; }
+.apoyos b { color: var(--tinta-suave); font-weight: 600; }
+
+/* Miniatura de la foto, cuando el reporte trae una. */
+.ficha .miniatura {
+  width: 54px;
+  height: 54px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--linea-suave);
+  background: var(--papel);
+}
+
+/* ===================================================================
+   Vacíos y esqueletos de carga
+   =================================================================== */
+.vacio {
+  padding: 2.4rem 1.4rem;
+  color: var(--apagado);
+  font-size: .9rem;
+  text-align: center;
+}
+
+.vacio .ico-chip { margin: 0 auto .7rem; width: 48px; height: 48px; border-radius: 12px; }
+.vacio .ico-chip .ico { width: 24px; height: 24px; }
+.vacio strong { display: block; color: var(--tinta); font-size: .95rem; margin-bottom: .25rem; }
+
+/* Mientras llegan los datos, en vez de la palabra «Cargando…». */
+.esqueleto { padding: .85rem 1.1rem; display: flex; gap: .75rem; align-items: flex-start; }
+.hueso { background: linear-gradient(90deg, var(--papel) 25%, var(--papel-hondo) 37%, var(--papel) 63%); background-size: 400% 100%; border-radius: 5px; }
+.esqueleto .hueso-chip { width: 38px; height: 38px; border-radius: 9px; flex-shrink: 0; }
+.esqueleto .hueso-texto { flex: 1; }
+.esqueleto .hueso-linea { height: 10px; margin-bottom: .45rem; }
+.esqueleto .hueso-linea.corta { width: 45%; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .hueso { animation: brillo 1.4s ease-in-out infinite; }
+  @keyframes brillo {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+  }
+}
+
+/* ===================================================================
+   Pastilla de estado
+   =================================================================== */
+.estado {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .14rem .5rem .14rem .4rem;
+  border-radius: var(--radio-chip);
+  font-size: .75rem;
+  font-weight: 600;
+  border: 1px solid;
+  white-space: nowrap;
+  letter-spacing: .005em;
+}
+
+.estado .ico { width: 13px; height: 13px; vertical-align: 0; }
+
+.estado-reportado   { color: #8d5c0b; background: var(--senal-fondo); border-color: var(--senal-borde); }
+.estado-en-revision,
+.estado-asignado,
+.estado-en-proceso  { color: #1e5886; background: var(--proceso-fondo); border-color: var(--proceso-borde); }
+.estado-resuelto    { color: #1c5a3c; background: var(--verificado-fondo); border-color: var(--verificado-borde); }
+
+/* Chip genérico, para metadatos sueltos. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .14rem .55rem;
+  border-radius: var(--radio-chip);
+  font-size: .76rem;
+  font-weight: 600;
+  background: var(--papel);
+  color: var(--apagado);
+  border: 1px solid var(--linea-suave);
+}
+
+/* ===================================================================
+   Vía de estados (el avance del reporte)
+   =================================================================== */
+.via {
+  display: flex;
+  align-items: flex-start;
+  list-style: none;
+  margin: 1.2rem 0 1.5rem;
+  padding: 0;
+}
+
+.via-parada { flex: 1; text-align: center; position: relative; }
+
+.via-parada::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: -50%;
+  width: 100%;
+  height: 2px;
+  background: var(--linea);
+}
+
+.via-parada:first-child::before { display: none; }
+.via-parada.hecha::before { background: var(--tinta); }
+
+.via-punto {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--linea);
+  background: var(--superficie);
+  color: transparent;
+  margin: 0 auto .4rem;
+  position: relative;
+  z-index: 1;
+  transition: all var(--transicion);
+}
+
+.via-punto .ico { width: 13px; height: 13px; vertical-align: 0; stroke-width: 3; }
+
+.via-parada.hecha .via-punto { border-color: var(--tinta); background: var(--tinta); color: #fff; }
+/* La parada actual no lleva palomita: todavía no está hecha. Se marca
+   con el relleno ámbar y el halo, que es el «estás aquí». */
+.via-parada.actual .via-punto {
+  border-color: var(--senal);
+  background: var(--senal);
+  color: transparent;
+  box-shadow: 0 0 0 4px var(--senal-fondo);
+}
+
+.via-parada small { font-size: .7rem; color: var(--apagado); display: block; line-height: 1.25; }
+.via-parada.hecha small, .via-parada.actual small { color: var(--tinta); font-weight: 600; }
+
+/* ===================================================================
+   Formularios
+   =================================================================== */
+label { display: block; font-size: .84rem; font-weight: 600; margin: .85rem 0 .28rem; }
+
+input, select, textarea {
+  width: 100%;
+  padding: .55rem .7rem;
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-ficha);
+  background: var(--superficie);
+  color: var(--tinta);
+  font: inherit;
+  font-size: .92rem;
+  transition: border-color var(--transicion), box-shadow var(--transicion);
+}
+
+input:hover, select:hover, textarea:hover { border-color: var(--apagado-claro); }
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--proceso);
+  box-shadow: 0 0 0 3px var(--proceso-fondo);
+}
+
+button:focus-visible, .ficha:focus-visible, a:focus-visible, .evento:focus-visible {
+  outline: 2px solid var(--proceso);
+  outline-offset: 2px;
+}
+
+/* El select propio: quitamos la flecha del sistema y ponemos la
+   nuestra, para que se vea igual en Chrome, Safari y Firefox. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235b6a7f' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right .55rem center;
+  background-size: 15px;
+  cursor: pointer;
+}
+
+textarea { min-height: 86px; resize: vertical; }
+
+/* Zona para la fotografía. */
+.zona-foto {
+  border: 1.5px dashed var(--linea);
+  border-radius: var(--radio-ficha);
+  background: var(--superficie-alt);
+  padding: .9rem;
+  text-align: center;
+  color: var(--apagado);
+  font-size: .85rem;
+  transition: border-color var(--transicion), background var(--transicion);
+}
+
+.zona-foto:hover { border-color: var(--proceso); background: var(--proceso-fondo); }
+.zona-foto .ico { width: 20px; height: 20px; display: block; margin: 0 auto .35rem; }
+.zona-foto input[type="file"] { margin-top: .5rem; font-size: .82rem; padding: .3rem; border: none; background: none; }
+.zona-foto.cargada { border-style: solid; border-color: var(--verificado-borde); background: var(--verificado-fondo); color: #1c5a3c; }
+
+.pista {
+  font-size: .82rem;
+  color: var(--apagado);
+  margin-top: .3rem;
+  display: flex;
+  align-items: flex-start;
+  gap: .35rem;
+}
+
+.pista .ico { margin-top: .17em; }
+
+/* ===================================================================
+   Botones
+   =================================================================== */
+button {
+  font: inherit;
+  font-weight: 600;
+  font-size: .92rem;
+  padding: .55rem 1rem;
+  border-radius: var(--radio-ficha);
+  border: 1px solid var(--tinta);
+  background: var(--tinta);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  transition: background var(--transicion), border-color var(--transicion),
+              transform var(--transicion), box-shadow var(--transicion);
+}
+
+button:hover:not(:disabled) { background: var(--tinta-suave); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+
+button.secundario { background: var(--superficie); color: var(--tinta); border-color: var(--linea); }
+button.secundario:hover:not(:disabled) { background: var(--superficie-alt); border-color: var(--apagado-claro); }
+
+button.menor { padding: .35rem .7rem; font-size: .84rem; }
+button.ancho { width: 100%; }
+button.fantasma { background: none; border-color: transparent; color: var(--apagado); }
+button.fantasma:hover:not(:disabled) { background: var(--papel); color: var(--tinta); }
+
+/* Botón que ya está activo: «sigo este reporte», «ya lo confirmé». */
+button.marcado {
+  background: var(--verificado-fondo);
+  border-color: var(--verificado-borde);
+  color: #1c5a3c;
+}
+
+button.marcado:hover:not(:disabled) { background: #daeee3; }
+
+.acciones { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .85rem; }
+
+/* ===================================================================
+   Mensajes
+   =================================================================== */
+.aviso {
+  padding: .6rem .8rem;
+  border-radius: var(--radio-ficha);
+  font-size: .88rem;
+  margin-top: .85rem;
+  border: 1px solid;
+  display: flex;
+  align-items: flex-start;
+  gap: .5rem;
+}
+
+.aviso .ico { margin-top: .16em; }
+.aviso.ok { background: var(--verificado-fondo); border-color: var(--verificado-borde); color: #1c5a3c; }
+.aviso.error { background: var(--alerta-fondo); border-color: var(--alerta-borde); color: var(--alerta); }
+
+/* ===================================================================
+   Capas flotantes y paneles
+   =================================================================== */
+.capa {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 32, 58, .5);
+  backdrop-filter: blur(2px);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 1000;
+}
+
+.capa.centrada { align-items: center; justify-content: center; padding: 1rem; }
+
+.panel {
+  background: var(--superficie);
+  width: min(460px, 100%);
+  height: 100%;
+  overflow-y: auto;
+  padding: 1.4rem;
+  box-shadow: var(--sombra-flotante);
+}
+
+.capa.centrada .panel {
+  height: auto;
+  max-height: 90vh;
+  border-radius: var(--radio-panel);
+  width: min(520px, 100%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .capa .panel { animation: entrar-lado .22s cubic-bezier(.3, .7, .4, 1); }
+  .capa.centrada .panel { animation: entrar-centro .18s cubic-bezier(.3, .7, .4, 1); }
+  @keyframes entrar-lado  { from { transform: translateX(18px); opacity: .4; } }
+  @keyframes entrar-centro { from { transform: scale(.98); opacity: 0; } }
+}
+
+.panel-encabezado {
+  display: flex;
+  align-items: flex-start;
+  gap: .9rem;
+  margin-bottom: .5rem;
+}
+
+.panel-encabezado h2 { font-size: 1.15rem; flex: 1; letter-spacing: -0.025em; }
+
+.cerrar {
+  background: none;
+  border: none;
+  color: var(--apagado);
+  padding: .3rem;
+  line-height: 1;
+  border-radius: var(--radio-ficha);
+  flex-shrink: 0;
+}
+
+.cerrar:hover { color: var(--tinta); background: var(--papel); }
+.cerrar .ico { width: 18px; height: 18px; vertical-align: 0; }
+
+/* ----------------------------------------- acciones sobre el mapa */
+.flotante-accion {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 1.4rem;
+  z-index: 500;
+  box-shadow: var(--sombra-flotante);
+  padding: .65rem 1.2rem;
+  border-radius: var(--radio-chip);
+}
+
+.flotante-accion:active:not(:disabled) { transform: translateX(-50%) translateY(1px); }
+.flotante-accion, .marcando { white-space: nowrap; }
+
+.marcando {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  background: var(--tinta);
+  color: #fff;
+  padding: .5rem .95rem;
+  border-radius: var(--radio-chip);
+  font-size: .88rem;
+  box-shadow: var(--sombra-flotante);
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  margin: 0;
+}
+
+/* Leyenda del mapa: el código de color de los estados. */
+.leyenda {
+  position: absolute;
+  left: 1rem;
+  bottom: 1.4rem;
+  z-index: 500;
+  background: rgba(255, 255, 255, .95);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-ficha);
+  box-shadow: var(--sombra-media);
+  padding: .55rem .7rem;
+  font-size: .76rem;
+  color: var(--apagado);
+}
+
+.leyenda b { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--apagado-claro); margin-bottom: .35rem; }
+.leyenda ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .22rem; }
+.leyenda li { display: flex; align-items: center; gap: .4rem; }
+.leyenda i { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+/* ===================================================================
+   Marcadores propios del mapa
+   El pin lleva el icono de la categoría y el color del estado, así el
+   mapa se lee sin abrir un solo reporte.
+   =================================================================== */
+.pin {
+  width: 32px;
+  height: 32px;
+  border-radius: 50% 50% 50% 4px;
+  transform: rotate(-45deg);
+  display: grid;
+  place-items: center;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(17, 32, 58, .35);
+  background: var(--apagado);
+  color: #fff;
+}
+
+.pin .ico { width: 16px; height: 16px; transform: rotate(45deg); vertical-align: 0; stroke-width: 2.3; }
+.pin-reportado { background: var(--senal); }
+.pin-en-revision, .pin-asignado, .pin-en-proceso { background: var(--proceso); }
+.pin-resuelto { background: var(--verificado); }
+
+.leaflet-marker-icon.marcador-rtc { background: none; border: none; }
+
+/* ===================================================================
+   Contenido del detalle
+   =================================================================== */
+.foto {
+  width: 100%;
+  border-radius: var(--radio-ficha);
+  border: 1px solid var(--linea);
+  margin: .6rem 0;
+  display: block;
+}
+
+.bloque-oficial {
+  border-left: 3px solid var(--verificado);
+  background: var(--verificado-fondo);
+  padding: .7rem .85rem;
+  border-radius: 0 var(--radio-ficha) var(--radio-ficha) 0;
+  margin: .9rem 0;
+  font-size: .9rem;
+}
+
+.bloque-oficial strong { display: flex; align-items: center; gap: .4rem; color: #1c5a3c; }
+
+.seccion { margin-top: 1.5rem; }
+.seccion > h3 { font-size: .95rem; margin-bottom: .55rem; display: flex; align-items: center; gap: .45rem; }
+
+.historial { list-style: none; margin: 0; padding: 0 0 0 1.1rem; font-size: .87rem; position: relative; }
+.historial::before { content: ""; position: absolute; left: 3px; top: .55rem; bottom: .55rem; width: 2px; background: var(--linea); }
+.historial li { padding: .5rem 0; position: relative; }
+.historial li::before {
+  content: "";
+  position: absolute;
+  left: -1.1rem;
+  top: .78rem;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--linea);
+  border: 2px solid var(--superficie);
+  box-shadow: 0 0 0 1px var(--linea);
+}
+.historial li:first-child::before { background: var(--senal); box-shadow: 0 0 0 1px var(--senal); }
+.historial strong { display: block; }
+.historial .dicho { display: block; color: var(--tinta-tenue); }
+.historial .cuando { display: block; color: var(--apagado); font-size: .79rem; margin-top: .12rem; }
+
+.comentario { padding: .7rem 0; border-bottom: 1px solid var(--linea-suave); font-size: .9rem; display: flex; gap: .65rem; }
+.comentario:last-of-type { border-bottom: none; }
+.comentario .cuerpo { min-width: 0; flex: 1; }
+.comentario .quien { font-weight: 600; font-size: .86rem; margin: 0; display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+.comentario.oficial .quien { color: var(--verificado); }
+.comentario .dicho { margin: .15rem 0; overflow-wrap: anywhere; }
+
+/* Avatar de iniciales, reutilizado en comentarios y perfil. */
+.inicial {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--tinta);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: .9rem;
+  flex-shrink: 0;
+}
+
+.inicial.grande { width: 52px; height: 52px; font-size: 1.3rem; }
+.inicial.oficial { background: var(--verificado); }
+
+/* ===================================================================
+   Muro de la ciudad
+   =================================================================== */
+.evento {
+  display: flex;
+  gap: .75rem;
+  padding: .8rem 1.1rem;
+  border: none;
+  border-bottom: 1px solid var(--linea-suave);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  background: none;
+  border-radius: 0;
+  font: inherit;
+  color: inherit;
+  align-items: flex-start;
+  transition: background var(--transicion);
+}
+
+.evento:hover { background: var(--superficie-alt); }
+.evento .cuerpo { min-width: 0; flex: 1; }
+.evento .verbo, .evento .asunto { overflow-wrap: anywhere; }
+.evento .verbo { font-size: .84rem; color: var(--apagado); margin: 0; display: flex; align-items: center; gap: .3rem; flex-wrap: wrap; }
+.evento .asunto { font-weight: 600; font-size: .93rem; margin: .12rem 0; }
+
+/* El color del chip dice qué clase de movimiento fue. */
+.evento.creado .ico-chip    { color: var(--senal);       background: var(--senal-fondo);      border-color: var(--senal-borde); }
+.evento.estado .ico-chip    { color: var(--proceso);     background: var(--proceso-fondo);    border-color: var(--proceso-borde); }
+.evento.resuelto .ico-chip  { color: var(--verificado);  background: var(--verificado-fondo); border-color: var(--verificado-borde); }
+.evento.reabierto .ico-chip { color: var(--alerta);      background: var(--alerta-fondo);     border-color: var(--alerta-borde); }
+.evento.confirmado .ico-chip{ color: var(--tinta-tenue); background: var(--papel);            border-color: var(--linea); }
+
+/* A ancho completo el muro se vuelve una tarjeta con sus bordes. */
+.escenario.sin-mapa .lista-eventos {
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-panel);
+  overflow: hidden;
+  box-shadow: var(--sombra-sutil);
+}
+
+.escenario.sin-mapa .evento:last-child { border-bottom: none; }
+
+/* ===================================================================
+   Tablero de la ciudad
+   =================================================================== */
+.cifras { display: grid; grid-template-columns: repeat(2, 1fr); gap: .7rem; padding: 1.1rem; }
+.escenario.sin-mapa .cifras { grid-template-columns: repeat(4, 1fr); padding: 0; }
+
+.cifra-tarjeta {
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-ficha);
+  padding: .85rem .9rem;
+  background: var(--superficie);
+  box-shadow: var(--sombra-sutil);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Filo de color arriba: le da identidad a cada cifra. */
+.cifra-tarjeta::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--linea);
+}
+
+.cifra-tarjeta.acento-senal::before      { background: var(--senal); }
+.cifra-tarjeta.acento-proceso::before    { background: var(--proceso); }
+.cifra-tarjeta.acento-verificado::before { background: var(--verificado); }
+.cifra-tarjeta.acento-alerta::before     { background: var(--alerta); }
+
+.cifra-tarjeta .encabezado {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
+  gap: .5rem;
+  color: var(--apagado);
+  margin-bottom: .2rem;
 }
 
-header.barra h1 { font-size: 1.15rem; margin: 0; }
-header.barra nav a { color: #cfe0f0; text-decoration: none; margin-left: 14px; font-size: .9rem; }
-header.barra nav a:hover { color: #fff; }
+.cifra-tarjeta .encabezado .ico { width: 16px; height: 16px; }
+.cifra-tarjeta b { display: block; font-size: 1.75rem; line-height: 1.1; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.cifra-tarjeta span { font-size: .8rem; color: var(--apagado); }
+.cifra-tarjeta.ancha { grid-column: span 2; }
 
-.contenedor { max-width: 1200px; margin: 0 auto; padding: 18px 16px 60px; }
-.columnas { display: grid; grid-template-columns: 380px 1fr; gap: 18px; align-items: start; }
-@media (max-width: 900px) { .columnas { grid-template-columns: 1fr; } }
-
-.tarjeta {
-  background: #fff;
+.barras { padding: 0 1.1rem 1.5rem; }
+.escenario.sin-mapa .barras {
+  padding: 1.1rem;
+  margin-top: 1.1rem;
+  background: var(--superficie);
   border: 1px solid var(--linea);
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 16px;
+  border-radius: var(--radio-panel);
+  box-shadow: var(--sombra-sutil);
 }
 
-.tarjeta h2 { margin: 0 0 12px; font-size: 1rem; color: var(--azul); }
+.barras h3 { font-size: .95rem; margin: .4rem 0 .9rem; display: flex; align-items: center; gap: .45rem; }
+.barra-fila { margin-bottom: .7rem; font-size: .85rem; display: flex; align-items: center; gap: .6rem; }
+.barra-fila .ico-chip { width: 28px; height: 28px; border-radius: 7px; }
+.barra-fila .ico-chip .ico { width: 14px; height: 14px; }
+.barra-fila .datos { flex: 1; min-width: 0; }
+.barra-fila .etiqueta { display: flex; justify-content: space-between; gap: .5rem; margin-bottom: .25rem; }
+.barra-fila .etiqueta > span { display: block; }
+.barra-fila .etiqueta > span:last-child { font-weight: 700; font-variant-numeric: tabular-nums; }
+.barra-pista { display: block; height: 8px; background: var(--papel-hondo); border-radius: 4px; overflow: hidden; }
+.barra-valor { display: block; height: 100%; border-radius: 4px; background: var(--proceso); transition: width 420ms cubic-bezier(.3, .7, .4, 1); }
 
-label { display: block; font-size: .82rem; color: var(--gris); margin: 10px 0 4px; }
+.barra-valor.cat-bache     { background: var(--cat-bache); }
+.barra-valor.cat-luminaria { background: var(--cat-luminaria); }
+.barra-valor.cat-basura    { background: var(--cat-basura); }
+.barra-valor.cat-agua      { background: var(--cat-agua); }
+.barra-valor.cat-arbol     { background: var(--cat-arbol); }
+.barra-valor.cat-semaforo  { background: var(--cat-semaforo); }
+.barra-valor.cat-otro      { background: var(--cat-otro); }
 
-input, select, textarea, button {
-  font-family: inherit;
-  font-size: .92rem;
-  width: 100%;
-  padding: 9px 10px;
+/* ===================================================================
+   Perfil e insignias
+   =================================================================== */
+.perfil-cabecera { display: flex; align-items: center; gap: .9rem; margin-bottom: .3rem; }
+.perfil-cabecera h3 { font-size: 1.05rem; }
+
+.insignias { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; margin-top: .6rem; }
+
+.insignia {
   border: 1px solid var(--linea);
-  border-radius: 8px;
-  background: #fff;
-  color: var(--tinta);
+  border-radius: var(--radio-ficha);
+  padding: .6rem .7rem;
+  font-size: .82rem;
+  display: flex;
+  gap: .55rem;
+  align-items: flex-start;
+  background: var(--superficie);
 }
 
-textarea { min-height: 78px; resize: vertical; }
+.insignia .ico-chip { width: 30px; height: 30px; border-radius: 50%; }
+.insignia .ico-chip .ico { width: 15px; height: 15px; }
+.insignia .cuerpo { min-width: 0; flex: 1; }
+.insignia b { display: block; font-size: .85rem; line-height: 1.25; }
+.insignia span { color: var(--apagado); font-size: .78rem; }
 
-button {
-  background: var(--azul);
-  color: #fff;
+.insignia.obtenida { border-color: var(--verificado-borde); background: var(--verificado-fondo); }
+.insignia.obtenida .ico-chip { background: var(--verificado); color: #fff; border-color: var(--verificado); }
+.insignia.pendiente { background: var(--superficie-alt); }
+.insignia.pendiente b { color: var(--apagado); }
+.insignia.pendiente .ico-chip { background: var(--papel-hondo); color: var(--apagado-claro); border-color: var(--linea); }
+
+/* Barrita de avance de la insignia que aún no se gana. */
+.insignia .avance { display: block; height: 4px; background: var(--papel-hondo); border-radius: 2px; margin-top: .35rem; overflow: hidden; }
+.insignia .avance i { display: block; height: 100%; background: var(--apagado-claro); border-radius: 2px; }
+
+.enlace-perfil {
+  background: none;
   border: none;
-  cursor: pointer;
+  padding: 0;
+  font: inherit;
   font-weight: 600;
-  margin-top: 12px;
+  color: var(--proceso);
+  cursor: pointer;
+  display: inline;
 }
 
-button:hover { background: #17608f; }
-button.secundario { background: #fff; color: var(--azul); border: 1px solid var(--azul); }
-button.pequeno { width: auto; padding: 6px 12px; font-size: .82rem; margin-top: 0; }
+.enlace-perfil:hover { background: none; color: var(--tinta); text-decoration: underline; }
 
-#mapa { height: 480px; border-radius: 12px; border: 1px solid var(--linea); }
+/* ===================================================================
+   Avisos
+   =================================================================== */
+.campana {
+  position: relative;
+  background: rgba(255, 255, 255, .09);
+  border: none;
+  color: #fff;
+  padding: .42rem;
+  border-radius: var(--radio-ficha);
+}
 
-.estado {
-  display: inline-block;
-  padding: 2px 9px;
-  border-radius: 999px;
-  font-size: .74rem;
+.campana:hover { background: rgba(255, 255, 255, .18); }
+.campana .ico { width: 18px; height: 18px; vertical-align: 0; }
+
+.campana .cuenta {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: var(--senal);
+  color: var(--tinta);
+  border-radius: var(--radio-chip);
+  font-size: .66rem;
   font-weight: 700;
-  border: 1px solid;
+  min-width: 17px;
+  padding: 0 4px;
+  line-height: 17px;
+  border: 2px solid var(--tinta);
 }
 
-.estado-reportado   { color: #b4530d; background: #fdf1e3; border-color: #f0c79a; }
-.estado-en-revision { color: #1f4e79; background: var(--azul-claro); border-color: #b9d3ea; }
-.estado-asignado    { color: #6b5bb5; background: #eeebf9; border-color: #cfc7f0; }
-.estado-en-proceso  { color: #17608f; background: #e4f1fa; border-color: #a9cde8; }
-.estado-resuelto    { color: #226b53; background: #e7f4ef; border-color: #a9d8c6; }
+.aviso-item {
+  padding: .75rem .6rem;
+  border-bottom: 1px solid var(--linea-suave);
+  cursor: pointer;
+  display: flex;
+  gap: .65rem;
+  align-items: flex-start;
+  border-radius: var(--radio-ficha);
+  transition: background var(--transicion);
+}
 
-.reporte { border-bottom: 1px solid var(--linea); padding: 12px 0; }
-.reporte:last-child { border-bottom: none; }
-.reporte h3 { margin: 0 0 4px; font-size: .95rem; }
-.reporte .meta { font-size: .78rem; color: var(--gris); display: flex; gap: 10px; flex-wrap: wrap; }
-.reporte img { max-width: 100%; border-radius: 8px; margin-top: 8px; }
+.aviso-item:hover { background: var(--superficie-alt); }
+.aviso-item:last-of-type { border-bottom: none; }
+.aviso-item.sin-leer { background: var(--proceso-fondo); }
+.aviso-item .cuerpo { min-width: 0; flex: 1; }
+.aviso-item h4 { font-size: .89rem; margin: 0 0 .15rem; }
+.aviso-item p { font-size: .84rem; color: var(--apagado); margin: 0; overflow-wrap: anywhere; }
+.aviso-item .punto { width: 7px; height: 7px; border-radius: 50%; background: var(--proceso); flex-shrink: 0; margin-top: .45rem; }
 
-.aviso { padding: 10px 12px; border-radius: 8px; font-size: .85rem; margin-top: 10px; }
-.aviso.ok { background: #e7f4ef; color: #226b53; }
-.aviso.error { background: #fdecea; color: #a4342a; }
+/* ===================================================================
+   Panel municipal
+   =================================================================== */
+.tablero { max-width: 1240px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+.tablero > h1 { font-size: 1.5rem; letter-spacing: -0.03em; display: flex; align-items: center; gap: .55rem; }
+.tablero > p { color: var(--apagado); font-size: .92rem; }
+
+.resumen { display: flex; gap: .6rem; flex-wrap: wrap; margin: 1.1rem 0 1.4rem; }
+
+.resumen button {
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  color: var(--tinta);
+  text-align: left;
+  padding: .65rem .85rem;
+  min-width: 132px;
+  font-weight: 500;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .1rem;
+  box-shadow: var(--sombra-sutil);
+  position: relative;
+  overflow: hidden;
+}
+
+.resumen button::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: transparent;
+  transition: background var(--transicion);
+}
+
+.resumen button:hover { background: var(--superficie-alt); border-color: var(--apagado-claro); }
+.resumen button[aria-pressed="true"] { border-color: var(--tinta); }
+.resumen button[aria-pressed="true"]::before { background: var(--senal); }
+.resumen .cifra { display: block; font-size: 1.5rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.resumen .rotulo { font-size: .8rem; color: var(--apagado); display: flex; align-items: center; gap: .3rem; }
+
+.tabla-envoltorio {
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio-panel);
+  overflow: hidden;
+  box-shadow: var(--sombra-sutil);
+}
+
+table { width: 100%; border-collapse: collapse; background: var(--superficie); }
+th, td { text-align: left; padding: .7rem .8rem; border-bottom: 1px solid var(--linea-suave); font-size: .9rem; vertical-align: middle; }
+th { font-size: .74rem; font-weight: 700; color: var(--apagado); background: var(--superficie-alt); text-transform: uppercase; letter-spacing: .05em; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr { transition: background var(--transicion); }
+tbody tr:hover { background: var(--superficie-alt); }
+td .titulo-fila { font-weight: 600; display: block; }
+td .asunto-celda { display: flex; align-items: center; gap: .6rem; }
+td .asunto-celda .folio { display: block; }
+td .sub-fila { display: block; font-size: .8rem; color: var(--apagado); }
+
+.prioridad { font-weight: 700; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: .3rem; }
+.prioridad.alta { color: var(--alerta); }
+
+/* ===================================================================
+   Accesibilidad y utilidades
+   =================================================================== */
 .oculto { display: none !important; }
+.solo-lectores { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.resumen { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.resumen div { background: var(--azul-claro); border-radius: 8px; padding: 8px 12px; font-size: .8rem; }
-.resumen strong { display: block; font-size: 1.2rem; color: var(--azul); }
+/* el popup de Leaflet, con la tipografía del resto */
+.leaflet-popup-content { font-family: Archivo, "Helvetica Neue", Arial, sans-serif; margin: .75rem .85rem; }
+.leaflet-popup-content h4 { margin: 0 0 .3rem; font-size: .92rem; }
+.leaflet-popup-content-wrapper { border-radius: var(--radio-ficha); }
+.leaflet-container { font-family: inherit; }
 
-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
-th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--linea); vertical-align: top; }
-th { color: var(--gris); font-weight: 600; font-size: .78rem; }
-.comentario { border-left: 3px solid var(--linea); padding: 6px 10px; margin: 8px 0; font-size: .85rem; }
-.comentario.oficial { border-color: var(--verde); background: #f4fbf8; }
-.paso { font-size: .82rem; color: var(--gris); padding: 4px 0; }
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* ===================================================================
+   Teléfono y tableta
+   =================================================================== */
+@media (max-width: 980px) {
+  .escenario.sin-mapa .cifras { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 860px) {
+  .escenario { grid-template-columns: 1fr; height: auto; }
+  /* En el teléfono el mapa va primero: quien reporta está parado en la
+     calle y lo que necesita a la mano es marcar el punto. */
+  .lienzo { height: 52vh; order: -1; }
+  .rail { border-right: none; border-top: 1px solid var(--linea); max-height: none; }
+  .rail-encabezado { position: static; }
+  .pestanas { position: static; }
+  .barra { gap: .5rem; padding: .55rem .9rem; }
+  /* Con la campana y el nombre, la navegación ya no cabe junto a la
+     marca: baja a su propio renglón. */
+  .barra nav { margin-left: 0; width: 100%; gap: .3rem; font-size: .85rem; }
+  .barra .separa { display: none; }
+  .barra nav a { padding: .32rem .5rem; }
+  .panel { padding: 1.1rem; }
+  .via-parada small { font-size: .64rem; }
+  .via-punto { width: 22px; height: 22px; }
+  .via-parada::before { top: 10px; }
+  .hoja { padding: 1.1rem .9rem 3rem; }
+  .leyenda { display: none; }
+  .insignias { grid-template-columns: 1fr; }
+  .tablero { padding: 1.1rem .9rem 3rem; }
+  .resumen button { min-width: calc(50% - .3rem); flex: 1; }
+}
+
+@media (max-width: 560px) {
+  /* En el teléfono los enlaces de la barra se quedan en iconos: con la
+     etiqueta, la navegación se parte en dos renglones y el nombre de la
+     cuenta se va solo a uno. El aria-label sigue describiéndolos. */
+  .barra nav .rotulo-nav { display: none; }
+  .barra nav a { padding: .42rem; }
+  .barra .yo { padding: .25rem .6rem .25rem .25rem; }
+  .barra .nombre-yo { max-width: 30vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+@media (max-width: 520px) {
+  .cifras, .escenario.sin-mapa .cifras { grid-template-columns: 1fr 1fr; }
+  .cifra-tarjeta b { font-size: 1.45rem; }
+  .filtros { grid-template-columns: 1fr; }
+}
