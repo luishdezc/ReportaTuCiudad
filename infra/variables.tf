@@ -47,6 +47,6 @@ variable "rol_lambda_existente" {
     Learner Lab (ahi el rol se llama "LabRole"). Si se deja vacio, Terraform
     crea sus propios roles con permisos minimos.
   DESC
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
 }
