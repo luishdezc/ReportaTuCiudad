@@ -27,6 +27,11 @@ on:
         type: choice
         options: [apply, plan, destroy]
         default: plan
+      sembrar:
+        description: Sembrar datos de ejemplo al terminar
+        type: choice
+        options: [si, no]
+        default: si
 
 permissions:
   contents: read
@@ -124,6 +129,22 @@ jobs:
           aws s3 sync ../frontend "s3://$(terraform output -raw bucket_frontend)" \
             --exclude "js/config.js" --delete --cache-control "max-age=60"
 
+      # Va antes de la prueba de humo a proposito: esa prueba entra al panel
+      # con la cuenta municipal, y el registro publico solo crea ciudadanos.
+      # El script usa put-item con un userId fijo, asi que repetirlo no
+      # duplica nada: deja la cuenta como debe estar.
+      - name: Crear la cuenta municipal
+        if: env.ACCION == 'apply'
+        env:
+          MUNI_CORREO: ${{ secrets.MUNICIPIO_CORREO }}
+          MUNI_CLAVE: ${{ secrets.MUNICIPIO_CLAVE }}
+        run: |
+          if [ -z "$MUNI_CORREO" ]; then
+            echo "Sin credenciales de la cuenta municipal; se omite."
+            exit 0
+          fi
+          bash ./scripts/crear_cuenta_municipal.sh "$MUNI_CORREO" "$MUNI_CLAVE"
+
       - name: Prueba de humo de los tres flujos
         if: env.ACCION == 'apply'
         env:
@@ -134,7 +155,26 @@ jobs:
             echo "Sin credenciales de la cuenta municipal; se omite la prueba de humo."
             exit 0
           fi
-          ./scripts/prueba_flujos.sh "$MUNI_CORREO" "$MUNI_CLAVE"
+          bash ./scripts/prueba_flujos.sh "$MUNI_CORREO" "$MUNI_CLAVE"
+
+      # Deja el mapa con reportes repartidos por la ciudad, en varias
+      # categorias y estados, con confirmaciones, comentarios y seguidores.
+      # Sin esto el ambiente recien desplegado abre con el mapa vacio.
+      #
+      # No corta el despliegue si falla: para entonces la infraestructura ya
+      # esta en pie y el fallo seria de datos, no del pipeline.
+      - name: Sembrar datos de ejemplo
+        if: env.ACCION == 'apply' && inputs.sembrar != 'no'
+        continue-on-error: true
+        env:
+          MUNI_CORREO: ${{ secrets.MUNICIPIO_CORREO }}
+          MUNI_CLAVE: ${{ secrets.MUNICIPIO_CLAVE }}
+        run: |
+          if [ -z "$MUNI_CORREO" ]; then
+            echo "Sin credenciales de la cuenta municipal; se omite la siembra."
+            exit 0
+          fi
+          bash ./scripts/sembrar_demo.sh "$MUNI_CORREO" "$MUNI_CLAVE"
 
       - name: Resumen del despliegue
         if: env.ACCION == 'apply'
@@ -145,6 +185,9 @@ jobs:
             echo "- Sitio: $(terraform output -raw url_sitio)"
             echo "- API: $(terraform output -raw url_api)"
             echo "- Dashboard: $(terraform output -raw dashboard)"
+            echo ""
+            echo "Cuenta municipal creada y mapa sembrado con reportes de ejemplo."
+            echo "Las metricas tardan unos minutos en aparecer en el dashboard."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Destruir
