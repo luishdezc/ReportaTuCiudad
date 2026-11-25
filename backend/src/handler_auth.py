@@ -1,7 +1,6 @@
 """Lambda de usuarios y sesion: registro, login y perfil."""
-from boto3.dynamodb.conditions import Key
-
 import common as c
+from boto3.dynamodb.conditions import Key
 
 
 def registrar(evento):
