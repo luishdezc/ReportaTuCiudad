@@ -26,3 +26,8 @@ frontend/js/config.js
 Thumbs.db
 .vscode/
 .idea/
+.pytest_cache/
+.coverage
+coverage.xml
+resultados.xml
+.ruff_cache/
