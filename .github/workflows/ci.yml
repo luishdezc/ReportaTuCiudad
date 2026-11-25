@@ -1,0 +1,191 @@
+name: CI
+
+# Se ejecuta en cada Pull Request hacia main y en cada push a main.
+# No toca AWS: solo revisa que el codigo y la infraestructura esten sanos.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  backend:
+    name: Backend — linter y pruebas unitarias
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Instalar dependencias
+        run: pip install -r backend/requirements-dev.txt
+
+      - name: Linter (ruff)
+        run: ruff check backend/
+
+      - name: Pruebas unitarias con cobertura
+        working-directory: backend
+        run: |
+          pytest --cov=src --cov-report=term-missing --cov-report=xml \
+                 --cov-fail-under=85 --junitxml=resultados.xml
+
+      - name: Publicar el resumen de las pruebas
+        if: always()
+        run: |
+          echo "### Pruebas unitarias" >> "$GITHUB_STEP_SUMMARY"
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import xml.etree.ElementTree as ET
+          try:
+              r = ET.parse("backend/resultados.xml").getroot()
+              s = r if r.tag == "testsuite" else r.find("testsuite")
+              total = int(s.get("tests", 0))
+              fallos = int(s.get("failures", 0)) + int(s.get("errors", 0))
+              print("- %d pruebas, %d fallos" % (total, fallos))
+          except Exception as exc:
+              print("- no se pudo leer el reporte: %s" % exc)
+          PY
+
+      - name: Guardar el reporte de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura
+          path: backend/coverage.xml
+          if-no-files-found: ignore
+
+  infraestructura:
+    name: Infraestructura — formato y validacion
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Formato
+        run: |
+          if ! terraform fmt -check -recursive; then
+            echo "::error::Hay archivos .tf sin formatear. Corre 'terraform fmt -recursive' y vuelve a subir los cambios."
+            terraform fmt -recursive -diff
+            exit 1
+          fi
+
+      # Sin backend remoto ni credenciales: valida sintaxis y referencias entre recursos.
+      - name: Inicializar
+        working-directory: infra
+        run: terraform init -backend=false -input=false
+
+      - name: Validar
+        working-directory: infra
+        run: terraform validate
+
+      - name: Validar el bootstrap del estado remoto
+        working-directory: infra/bootstrap
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+  frontend:
+    name: Frontend — sintaxis y enlaces
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Sintaxis de los archivos JavaScript
+        run: |
+          for archivo in frontend/js/*.js; do
+            node --check "$archivo"
+          done
+
+      - name: Todos los iconos usados existen en el sprite
+        run: |
+          node -e '
+            const fs = require("fs");
+            const fuente = fs.readFileSync("frontend/js/iconos.js", "utf8");
+            // El sprite esta partido en lineas cortas para que se pueda leer
+            // en una revision, asi que hay que armarlo antes de buscar los
+            // simbolos: un id puede quedar cortado entre dos trozos.
+            global.document = { addEventListener() {} };
+            const modulo = new Function(
+              fuente + "; return {SPRITE_ICONOS, ICONO_CATEGORIA, ICONO_ESTADO};")();
+            const definidos = new Set(
+              [...modulo.SPRITE_ICONOS.matchAll(/id="i-([a-z-]+)"/g)].map((m) => m[1]));
+            const usados = new Set();
+            // Los que estan escritos tal cual en el marcado.
+            for (const archivo of ["frontend/index.html", "frontend/admin.html"]) {
+              const texto = fs.readFileSync(archivo, "utf8");
+              for (const m of texto.matchAll(/#i-([a-z-]+)/g)) usados.add(m[1]);
+            }
+            // Y los que salen de las tablas de categoria y estado.
+            for (const mapa of [modulo.ICONO_CATEGORIA, modulo.ICONO_ESTADO]) {
+              Object.values(mapa).forEach((i) => usados.add(i));
+            }
+            const faltan = [...usados].filter((i) => !definidos.has(i));
+            if (faltan.length) {
+              console.error("::error::iconos usados que no estan en el sprite: " + faltan.join(", "));
+              process.exit(1);
+            }
+            console.log("Correcto: " + usados.size + " iconos usados, " +
+                        definidos.size + " definidos en el sprite.");
+          '
+
+      - name: config.js no debe estar versionado
+        run: |
+          if git ls-files --error-unmatch frontend/js/config.js 2>/dev/null; then
+            echo "::error::frontend/js/config.js lo genera Terraform y no debe subirse al repo."
+            exit 1
+          fi
+          echo "Correcto: config.js no esta versionado."
+
+  scripts:
+    name: Scripts — sintaxis de bash
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Revisar sintaxis
+        run: |
+          for archivo in scripts/*.sh; do
+            bash -n "$archivo"
+          done
+
+      - name: shellcheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: ./scripts
+          severity: warning
+
+  secretos:
+    name: Seguridad — no subir credenciales
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Buscar estado de Terraform y llaves de AWS
+        run: |
+          fallo=0
+          if git ls-files | grep -E '\.tfstate|\.tfvars\.json|\.pem$|^\.env$'; then
+            echo "::error::Hay archivos de estado o credenciales versionados."
+            fallo=1
+          fi
+          if git grep -nE 'AKIA[0-9A-Z]{16}' -- . ':!.github/workflows/*'; then
+            echo "::error::Parece haber una llave de acceso de AWS en el codigo."
+            fallo=1
+          fi
+          exit $fallo

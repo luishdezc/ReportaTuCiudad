@@ -1,0 +1,153 @@
+name: Desplegar
+
+# Despliegue continuo: al integrar codigo en main, el pipeline despliega los
+# cambios en la nube. Tambien se puede lanzar a mano para hacer un plan o para
+# apagar el ambiente.
+#
+# Las credenciales del AWS Academy Learner Lab son temporales y caducan al
+# cerrar la sesion del laboratorio, asi que hay que actualizar los secretos del
+# repositorio antes de que corra. Si caducaron, el pipeline falla con un
+# mensaje que lo dice en lugar de un error de AWS sin contexto.
+# Ver docs/CICD.md.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  workflow_dispatch:
+    inputs:
+      ambiente:
+        description: Ambiente a desplegar
+        type: choice
+        options: [lab, dev]
+        default: lab
+      accion:
+        description: Que hacer
+        type: choice
+        options: [apply, plan, destroy]
+        default: plan
+
+permissions:
+  contents: read
+
+concurrency:
+  # Dos despliegues simultaneos al mismo ambiente corromperian el estado.
+  group: despliegue-${{ inputs.ambiente || 'lab' }}
+  cancel-in-progress: false
+
+jobs:
+  # Antes de tocar la nube se repiten las pruebas: un merge a main no debe
+  # desplegar nada que no haya pasado por el mismo filtro que el Pull Request.
+  verificar:
+    name: Pruebas antes de desplegar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - run: pip install -r backend/requirements-dev.txt
+
+      - name: Linter
+        run: ruff check backend/
+
+      - name: Pruebas unitarias
+        working-directory: backend
+        run: pytest --cov=src --cov-fail-under=85
+
+  desplegar:
+    name: ${{ inputs.accion || 'apply' }} en ${{ inputs.ambiente || 'lab' }}
+    needs: verificar
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.ambiente || 'lab' }}
+    env:
+      AMBIENTE: ${{ inputs.ambiente || 'lab' }}
+      ACCION: ${{ inputs.accion || 'apply' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Comprobar que las credenciales siguen vigentes
+        run: |
+          if ! aws sts get-caller-identity; then
+            echo "::error::Las credenciales caducaron. Actualiza los secretos del repositorio con las de la sesion activa del Learner Lab y vuelve a lanzar este workflow."
+            exit 1
+          fi
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Preparar los buckets de S3
+        if: env.ACCION != 'destroy'
+        run: |
+          CUENTA="$(aws sts get-caller-identity --query Account --output text)"
+          for sufijo in web media; do
+            BUCKET="reportatuciudad-dev-${sufijo}-${CUENTA}"
+            if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+              echo "ya existe: $BUCKET"
+            else
+              aws s3api create-bucket --bucket "$BUCKET" --region us-east-1
+              echo "creado: $BUCKET"
+            fi
+          done
+
+      - name: Inicializar
+        working-directory: infra
+        run: terraform init -input=false
+
+      - name: Plan
+        working-directory: infra
+        run: terraform plan -input=false -var-file="envs/${AMBIENTE}.tfvars" -no-color
+
+      - name: Aplicar
+        if: env.ACCION == 'apply'
+        working-directory: infra
+        run: terraform apply -input=false -auto-approve -var-file="envs/${AMBIENTE}.tfvars"
+
+      - name: Publicar el frontend
+        if: env.ACCION == 'apply'
+        working-directory: infra
+        run: |
+          aws s3 sync ../frontend "s3://$(terraform output -raw bucket_frontend)" \
+            --exclude "js/config.js" --delete --cache-control "max-age=60"
+
+      - name: Prueba de humo de los tres flujos
+        if: env.ACCION == 'apply'
+        env:
+          MUNI_CORREO: ${{ secrets.MUNICIPIO_CORREO }}
+          MUNI_CLAVE: ${{ secrets.MUNICIPIO_CLAVE }}
+        run: |
+          if [ -z "$MUNI_CORREO" ]; then
+            echo "Sin credenciales de la cuenta municipal; se omite la prueba de humo."
+            exit 0
+          fi
+          ./scripts/prueba_flujos.sh "$MUNI_CORREO" "$MUNI_CLAVE"
+
+      - name: Resumen del despliegue
+        if: env.ACCION == 'apply'
+        working-directory: infra
+        run: |
+          {
+            echo "### Desplegado en la nube"
+            echo "- Sitio: $(terraform output -raw url_sitio)"
+            echo "- API: $(terraform output -raw url_api)"
+            echo "- Dashboard: $(terraform output -raw dashboard)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Destruir
+        if: env.ACCION == 'destroy'
+        working-directory: infra
+        run: terraform destroy -input=false -auto-approve -var-file="envs/${AMBIENTE}.tfvars"

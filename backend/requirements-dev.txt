@@ -1,0 +1,7 @@
+# Dependencias para correr las pruebas unitarias.
+# El runtime de Lambda ya trae boto3, por eso no hay requirements.txt de produccion.
+pytest==9.1.1
+pytest-cov==7.0.0
+moto[dynamodb,s3,sqs,sns,secretsmanager]==5.2.3
+boto3==1.43.109
+ruff==0.14.0

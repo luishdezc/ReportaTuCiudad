@@ -75,15 +75,25 @@ R5=$(crear_reporte "$TOKEN_B" "Semáforo intermitente" "Semáforo dañado" \
 echo "  5 reportes creados"
 
 # Confirmaciones y comentarios: dan prioridad y llenan la bandeja del municipio
-for par in "$TOKEN_B:$R1" "$TOKEN_C:$R1" "$TOKEN_A:$R3" "$TOKEN_C:$R5"; do
+for par in "$TOKEN_B:$R1" "$TOKEN_C:$R1" "$TOKEN_A:$R3" "$TOKEN_C:$R5" "$TOKEN_B:$R4"; do
   curl -s -o /dev/null -X POST "$API/reportes/${par#*:}/confirmaciones" \
+    -H "Authorization: Bearer ${par%%:*}" -H 'Content-Type: application/json' -d '{}'
+done
+
+# Seguidores: reciben los avisos sin afirmar que vieron el problema
+for par in "$TOKEN_C:$R2" "$TOKEN_A:$R5" "$TOKEN_B:$R3"; do
+  curl -s -o /dev/null -X POST "$API/reportes/${par#*:}/seguidores" \
     -H "Authorization: Bearer ${par%%:*}" -H 'Content-Type: application/json' -d '{}'
 done
 curl -s -o /dev/null -X POST "$API/reportes/$R1/comentarios" -H "Authorization: Bearer $TOKEN_C" \
   -H 'Content-Type: application/json' -d '{"texto":"Yo paso por ahí todos los días, ya está peor."}'
 curl -s -o /dev/null -X POST "$API/reportes/$R3/comentarios" -H "Authorization: Bearer $TOKEN_B" \
   -H 'Content-Type: application/json' -d '{"texto":"El camión no pasa desde hace dos semanas."}'
-echo "  4 confirmaciones y 2 comentarios"
+curl -s -o /dev/null -X POST "$API/reportes/$R5/comentarios" -H "Authorization: Bearer $TOKEN_A" \
+  -H 'Content-Type: application/json' -d '{"texto":"Ayer casi chocan dos coches en ese cruce."}'
+curl -s -o /dev/null -X POST "$API/reportes/$R4/comentarios" -H "Authorization: Bearer $TOKEN_C" \
+  -H 'Content-Type: application/json' -d '{"texto":"El agua ya llegó hasta la esquina."}'
+echo "  5 confirmaciones, 3 seguidores y 4 comentarios"
 
 # Estados variados para que la bandeja y el mapa no se vean todos iguales
 RESP=$(curl -s -X POST "$API/auth/login" -H 'Content-Type: application/json' \
@@ -98,5 +108,10 @@ estado "$TOKEN_M" "$R2" "Resuelto"    "Luminaria sustituida." "evidencias/demo.j
 echo "  estados variados aplicados (quedan 1 Reportado, 1 En revisión, 1 Asignado, 1 En proceso, 1 Resuelto)"
 
 echo
-echo "Listo. El mapa ya tiene reportes repartidos y la bandeja municipal tiene de todo."
-echo "El reporte \"$R1\" quedó en Reportado con 2 confirmaciones: úsalo si quieres atenderlo en vivo."
+echo "Listo. El mapa tiene reportes repartidos, el muro de actividad tiene movimiento"
+echo "y el tablero de la ciudad ya muestra numeros."
+echo
+echo "Para la demostracion:"
+echo "  - \"$R1\" quedo en Reportado con 2 confirmaciones: atiendelo en vivo."
+echo "  - Entra como ana$SUFIJO@ejemplo.com (clave Demo12345) para ver avisos y perfil."
+echo "  - Las metricas de CloudWatch tardan unos minutos en aparecer en el dashboard."

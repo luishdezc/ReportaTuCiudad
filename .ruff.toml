@@ -1,0 +1,16 @@
+# Linter del backend. Reglas deliberadamente modestas: el objetivo es atrapar
+# imports sin usar, variables muertas y errores de sintaxis, no imponer estilo.
+line-length = 110
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "B"]
+ignore = [
+  "E501",  # el largo de linea lo cuida line-length, sin romper comentarios largos
+  "B008",  # llamadas en valores por defecto: no aplica a este codigo
+  # No se usa UP (pyupgrade): el codigo formatea con % de forma deliberada.
+]
+
+[lint.per-file-ignores]
+"backend/tests/*" = ["E402"]  # las pruebas importan despues de levantar moto a proposito
+"backend/tests/conftest.py" = ["E402", "F401"]

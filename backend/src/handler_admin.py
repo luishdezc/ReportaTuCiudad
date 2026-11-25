@@ -1,7 +1,6 @@
 """Lambda del panel de la cuenta municipal simulada."""
-from boto3.dynamodb.conditions import Key
-
 import common as c
+from boto3.dynamodb.conditions import Key
 
 
 def bandeja(evento):
@@ -71,27 +70,40 @@ def cambiar_estado(evento):
         UpdateExpression=expresion,
         ExpressionAttributeValues=valores,
     )
+    marca = c.ahora_preciso()
     c.interacciones.put_item(Item={
-        "reportId": report_id, "sk": "HIST#%s" % momento, "tipo": "historial",
+        "reportId": report_id, "sk": "HIST#%s" % marca, "tipo": "historial",
         "estado": nuevo_estado, "autor": sesion.get("nombre", "Cuenta municipal"),
         "mensaje": datos.get("respuesta", "").strip()[:500] or "Actualizacion de estado",
-        "creadoEn": momento,
+        "creadoEn": marca,
     })
 
-    interesados = c.interacciones.query(
-        KeyConditionExpression=Key("reportId").eq(report_id)
-    ).get("Items", [])
-    destinatarios = [reporte["autorEmail"]] + [
-        i["email"] for i in interesados if i["tipo"] == "confirmacion" and i.get("email")
-    ]
+    ids, correos = c.interesados(report_id, reporte)
     c.publicar_evento("reporte.estado", {
         "reportId": report_id,
         "titulo": reporte["titulo"],
         "estado": nuevo_estado,
         "respuesta": datos.get("respuesta", ""),
         "evidencia": c.url_publica(datos.get("evidenciaKey", "")),
-        "destinatarios": sorted(set(destinatarios)),
+        "destinatarios": correos,
     })
+    c.notificar_en_app(
+        ids,
+        "Tu reporte cambio a %s" % nuevo_estado,
+        "\"%s\" ahora esta en %s. %s" % (
+            reporte["titulo"], nuevo_estado, datos.get("respuesta", "")),
+        report_id, tipo="estado")
+    c.registrar_actividad(
+        "reporte.estado",
+        dict(reporte, estado=nuevo_estado, actor=sesion.get("nombre", "Cuenta municipal")),
+        detalle=datos.get("respuesta", ""))
+
+    if nuevo_estado == "Resuelto" and reporte.get("estado") != "Resuelto":
+        tardanza = c.minutos_desde(reporte["creadoEn"])
+        c.sumar_totales(reportesResueltos=1, minutosResolucionAcumulados=tardanza)
+        c.metrica("ReportesResueltos", dimensiones={"Categoria": reporte.get("categoria", "Otro")})
+        c.metrica("MinutosHastaResolucion", valor=tardanza, unidad="None")
+
     return c.respuesta(200, {"reportId": report_id, "estado": nuevo_estado, "actualizadoEn": momento})
 
 
