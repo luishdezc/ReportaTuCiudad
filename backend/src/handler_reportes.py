@@ -5,7 +5,7 @@ from boto3.dynamodb.conditions import Key
 
 def url_de_carga(evento):
     """Devuelve una URL prefirmada para que el navegador suba la foto directo a S3."""
-    sesion = c.usuario_actual(evento)   
+    sesion = c.usuario_actual(evento)
     datos = c.cuerpo_json(evento)
     tipo = datos.get("contentType", "image/jpeg")
     if tipo not in ("image/jpeg", "image/png", "image/webp"):
