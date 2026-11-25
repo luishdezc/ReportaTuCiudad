@@ -4,99 +4,656 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ReportaTuCiudad</title>
+<meta name="description" content="Reporta baches, luminarias, fugas y basura de tu colonia, y sigue qué hace el municipio con tu reporte.">
+<meta name="theme-color" content="#11203a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Roboto+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header class="barra">
-  <h1>ReportaTuCiudad</h1>
-  <nav>
-    <a href="index.html">Mapa ciudadano</a>
-    <a href="admin.html">Panel municipal</a>
-    <a href="#" id="salir" class="oculto">Cerrar sesión</a>
-  </nav>
-</header>
 
-<div class="contenedor">
-  <div class="columnas">
-    <!-- ------------------------- columna izquierda ------------------------ -->
-    <div>
-      <!-- sesión -->
-      <div class="tarjeta" id="tarjeta-sesion">
-        <h2>Entrar a la plataforma</h2>
-        <div id="formulario-login">
-          <label for="login-email">Correo</label>
-          <input id="login-email" type="email" placeholder="tucorreo@ejemplo.com">
-          <label for="login-password">Contraseña</label>
-          <input id="login-password" type="password" placeholder="••••••••">
-          <button id="btn-login">Iniciar sesión</button>
-          <button id="btn-ir-registro" class="secundario">Crear una cuenta</button>
-        </div>
-
-        <div id="formulario-registro" class="oculto">
-          <label for="reg-nombre">Nombre</label>
-          <input id="reg-nombre" type="text" placeholder="Nombre y apellido">
-          <label for="reg-email">Correo</label>
-          <input id="reg-email" type="email" placeholder="tucorreo@ejemplo.com">
-          <label for="reg-colonia">Colonia o zona</label>
-          <input id="reg-colonia" type="text" placeholder="Centro">
-          <label for="reg-password">Contraseña (mínimo 8 caracteres)</label>
-          <input id="reg-password" type="password">
-          <button id="btn-registro">Registrarme</button>
-          <button id="btn-ir-login" class="secundario">Ya tengo cuenta</button>
-        </div>
-        <div id="aviso-sesion" class="aviso oculto"></div>
-      </div>
-
-      <!-- nuevo reporte -->
-      <div class="tarjeta oculto" id="tarjeta-reporte">
-        <h2>Reportar un problema</h2>
-        <p class="paso">1. Haz clic en el mapa para marcar la ubicación exacta.</p>
-        <label for="rep-titulo">Título</label>
-        <input id="rep-titulo" type="text" placeholder="Bache profundo sobre Av. Hidalgo">
-        <label for="rep-categoria">Categoría</label>
-        <select id="rep-categoria"></select>
-        <label for="rep-direccion">Referencia o dirección</label>
-        <input id="rep-direccion" type="text" placeholder="Frente al número 240">
-        <label for="rep-descripcion">Descripción</label>
-        <textarea id="rep-descripcion" placeholder="Describe el problema y desde cuándo está así"></textarea>
-        <label for="rep-foto">Fotografía</label>
-        <input id="rep-foto" type="file" accept="image/*">
-        <label>Ubicación seleccionada</label>
-        <input id="rep-coords" type="text" readonly placeholder="Sin ubicación marcada">
-        <button id="btn-crear">Enviar reporte</button>
-        <div id="aviso-reporte" class="aviso oculto"></div>
-      </div>
-
-      <!-- filtros -->
-      <div class="tarjeta">
-        <h2>Filtrar el mapa</h2>
-        <label for="filtro-estado">Estado</label>
-        <select id="filtro-estado"><option value="">Todos</option></select>
-        <label for="filtro-categoria">Categoría</label>
-        <select id="filtro-categoria"><option value="">Todas</option></select>
-        <button id="btn-filtrar" class="secundario">Aplicar filtros</button>
-      </div>
+<div id="app" v-cloak>
+  <header class="barra">
+    <div class="marca">
+      <span class="placa" aria-hidden="true"><svg class="ico"><use href="#i-pin"></use></svg></span>
+      ReportaTuCiudad
     </div>
+    <nav>
+      <a href="index.html" class="activo"><svg class="ico" aria-hidden="true"><use href="#i-mapa"></use></svg> <span class="rotulo-nav">Mapa</span></a>
+      <a href="admin.html"><svg class="ico" aria-hidden="true"><use href="#i-municipio"></use></svg> <span class="rotulo-nav">Panel municipal</span></a>
+      <span class="separa" aria-hidden="true"></span>
+      <template v-if="usuario">
+        <button class="campana" @click="abrirAvisos" :aria-label="'Avisos, ' + sinLeer + ' sin leer'">
+          <svg class="ico" aria-hidden="true"><use href="#i-campana"></use></svg>
+          <span v-if="sinLeer" class="cuenta">{{ sinLeer }}</span>
+        </button>
+        <button class="yo" @click="verPerfil(usuario.userId)">
+          <span class="inicial-mini" aria-hidden="true">{{ usuario.nombre.charAt(0) }}</span>
+          <span class="nombre-yo">{{ usuario.nombre.split(' ')[0] }}</span>
+        </button>
+        <a href="#" @click.prevent="salir" aria-label="Cerrar sesión">
+          <svg class="ico" aria-hidden="true"><use href="#i-salir"></use></svg>
+        </a>
+      </template>
+      <a v-else href="#" @click.prevent="abrirSesion">
+        <svg class="ico" aria-hidden="true"><use href="#i-entrar"></use></svg> <span class="rotulo-nav">Entrar</span>
+      </a>
+    </nav>
+  </header>
 
-    <!-- ------------------------- columna derecha -------------------------- -->
-    <div>
+  <div class="escenario" :class="{ 'sin-mapa': pestana !== 'mapa' }">
+    <!-- ------------------------------------------------ rail de fichas -->
+    <aside class="rail">
+      <div class="pestanas" role="tablist">
+        <button role="tab" :aria-selected="String(pestana === 'mapa')" @click="pestana = 'mapa'">
+          <svg class="ico" aria-hidden="true"><use href="#i-pin"></use></svg> Reportes
+        </button>
+        <button role="tab" :aria-selected="String(pestana === 'actividad')" @click="verActividad">
+          <svg class="ico" aria-hidden="true"><use href="#i-pulso"></use></svg> Actividad
+        </button>
+        <button role="tab" :aria-selected="String(pestana === 'ciudad')" @click="verEstadisticas">
+          <svg class="ico" aria-hidden="true"><use href="#i-barras"></use></svg> La ciudad
+        </button>
+      </div>
+
+      <!-- ===================================================== reportes -->
+      <template v-if="pestana === 'mapa'">
+      <div class="rail-encabezado">
+        <h2>Reportes de la zona</h2>
+        <p class="conteo">
+          <svg class="ico" aria-hidden="true"><use href="#i-filtro"></use></svg>
+          {{ textoConteo }}
+        </p>
+        <div class="filtros">
+          <div>
+            <label for="filtro-estado">Estado</label>
+            <select id="filtro-estado" v-model="filtroEstado" @change="cargarReportes">
+              <option value="">Todos</option>
+              <option v-for="e in estados" :key="e" :value="e">{{ e }}</option>
+            </select>
+          </div>
+          <div>
+            <label for="filtro-categoria">Categoría</label>
+            <select id="filtro-categoria" v-model="filtroCategoria" @change="cargarReportes">
+              <option value="">Todas</option>
+              <option v-for="c in categorias" :key="c" :value="c">{{ c }}</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <template v-if="cargando">
+        <div v-for="n in 3" :key="n" class="esqueleto" aria-hidden="true">
+          <span class="hueso hueso-chip"></span>
+          <span class="hueso-texto">
+            <span class="hueso hueso-linea"></span>
+            <span class="hueso hueso-linea corta"></span>
+          </span>
+        </div>
+        <p class="solo-lectores">Cargando reportes…</p>
+      </template>
+
+      <div v-else-if="errorCarga" class="vacio">
+        <span class="ico-chip cat-semaforo"><svg class="ico"><use href="#i-alerta"></use></svg></span>
+        <strong>No se pudieron cargar los reportes</strong>
+        {{ errorCarga }}
+      </div>
+
+      <div v-else-if="!reportes.length" class="vacio">
+        <span class="ico-chip"><svg class="ico"><use href="#i-buscar"></use></svg></span>
+        <strong>Nada por aquí todavía</strong>
+        Si ves un problema en la calle, repórtalo y aparecerá en este mapa.
+      </div>
+
+      <button v-for="r in reportes" :key="r.reportId" class="ficha"
+              :aria-current="String(seleccionado === r.reportId)"
+              @click="verDetalle(r.reportId)">
+        <span class="ico-chip" :class="'cat-' + iconoCategoria(r.categoria)" aria-hidden="true">
+          <svg class="ico"><use :href="'#i-' + iconoCategoria(r.categoria)"></use></svg>
+        </span>
+        <span class="ficha-cuerpo">
+          <h3>{{ r.titulo }}</h3>
+          <span class="folio">{{ r.reportId }}</span>
+          <span class="meta">
+            <span :class="claseEstado(r.estado)">
+              <svg class="ico" aria-hidden="true"><use :href="'#i-' + iconoEstado(r.estado)"></use></svg>
+              {{ r.estado }}
+            </span>
+            <span class="categoria">{{ r.categoria }}</span>
+          </span>
+          <span class="apoyos">
+            <span><svg class="ico" aria-hidden="true"><use href="#i-vecinos"></use></svg> <b>{{ r.confirmaciones }}</b> confirman</span>
+            <span><svg class="ico" aria-hidden="true"><use href="#i-comentario"></use></svg> <b>{{ r.comentarios }}</b></span>
+            <span><svg class="ico" aria-hidden="true"><use href="#i-reloj"></use></svg> {{ hace(r.creadoEn) }}</span>
+          </span>
+        </span>
+        <img v-if="r.foto" class="miniatura" :src="r.foto" alt="">
+      </button>
+      </template>
+
+      <!-- ================================================ muro de la ciudad -->
+      <template v-else-if="pestana === 'actividad'">
+        <div class="hoja">
+          <div class="hoja-encabezado">
+            <h2>Lo que pasa en la ciudad</h2>
+            <p>Movimientos de los últimos tres días: reportes nuevos, respaldos de vecinos y cambios del municipio.</p>
+          </div>
+
+          <div v-if="!actividad.length" class="vacio">
+            <span class="ico-chip"><svg class="ico"><use href="#i-pulso"></use></svg></span>
+            <strong>Todavía no hay movimiento</strong>
+            En cuanto alguien reporte algo o el municipio responda, aparecerá aquí.
+          </div>
+
+          <div v-else class="lista-eventos">
+            <button v-for="(e, i) in actividad" :key="i" class="evento" :class="claseEvento(e)"
+                    @click="verDetalle(e.reportId)">
+              <span class="ico-chip" aria-hidden="true">
+                <svg class="ico"><use :href="'#i-' + iconoEvento(e)"></use></svg>
+              </span>
+              <span class="cuerpo">
+                <p class="verbo">{{ verboEvento(e) }}</p>
+                <p class="asunto">{{ e.titulo }}</p>
+                <p class="verbo">
+                  <span class="chip">{{ e.categoria }}</span>
+                  <svg class="ico" aria-hidden="true"><use href="#i-reloj"></use></svg> {{ hace(e.creadoEn) }}
+                </p>
+              </span>
+              <svg class="ico" aria-hidden="true" style="color:var(--apagado-claro);align-self:center"><use href="#i-flecha"></use></svg>
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <!-- ============================================ tablero de la ciudad -->
+      <template v-else>
+        <div class="hoja">
+          <div class="hoja-encabezado">
+            <h2>La ciudad en números</h2>
+            <p>Todo lo que se ha reportado y lo que el municipio ha hecho con ello. Cualquiera puede verlo, sin cuenta.</p>
+          </div>
+
+          <div v-if="estadisticas" class="cifras">
+            <div class="cifra-tarjeta acento-senal">
+              <span class="encabezado">
+                <span>reportes levantados</span>
+                <svg class="ico" aria-hidden="true"><use href="#i-megafono"></use></svg>
+              </span>
+              <b>{{ estadisticas.reportesCreados }}</b>
+            </div>
+            <div class="cifra-tarjeta acento-verificado">
+              <span class="encabezado">
+                <span>resueltos con evidencia</span>
+                <svg class="ico" aria-hidden="true"><use href="#i-listo"></use></svg>
+              </span>
+              <b>{{ estadisticas.reportesResueltos }}</b>
+            </div>
+            <div class="cifra-tarjeta acento-proceso">
+              <span class="encabezado">
+                <span>llegó a Resuelto</span>
+                <svg class="ico" aria-hidden="true"><use href="#i-medidor"></use></svg>
+              </span>
+              <b>{{ estadisticas.porcentajeResuelto }}%</b>
+            </div>
+            <div class="cifra-tarjeta acento-proceso">
+              <span class="encabezado">
+                <span>horas para resolver</span>
+                <svg class="ico" aria-hidden="true"><use href="#i-reloj"></use></svg>
+              </span>
+              <b>{{ estadisticas.horasPromedioResolucion }}</b>
+            </div>
+            <div class="cifra-tarjeta">
+              <span class="encabezado">
+                <span>confirmaciones de vecinos</span>
+                <svg class="ico" aria-hidden="true"><use href="#i-vecinos"></use></svg>
+              </span>
+              <b>{{ estadisticas.confirmaciones }}</b>
+            </div>
+            <div class="cifra-tarjeta">
+              <span class="encabezado">
+                <span>comentarios publicados</span>
+                <svg class="ico" aria-hidden="true"><use href="#i-comentario"></use></svg>
+              </span>
+              <b>{{ estadisticas.comentarios }}</b>
+            </div>
+            <div class="cifra-tarjeta acento-alerta">
+              <span class="encabezado">
+                <span>cierres que la comunidad rechazó</span>
+                <svg class="ico" aria-hidden="true"><use href="#i-pulgar-abajo"></use></svg>
+              </span>
+              <b>{{ estadisticas.reabiertos }}</b>
+            </div>
+            <div class="cifra-tarjeta">
+              <span class="encabezado">
+                <span>vecinos participando</span>
+                <svg class="ico" aria-hidden="true"><use href="#i-tendencia"></use></svg>
+              </span>
+              <b>{{ estadisticas.confirmaciones + estadisticas.comentarios }}</b>
+            </div>
+          </div>
+
+          <div v-if="categoriasOrdenadas.length" class="barras">
+            <h3><svg class="ico" aria-hidden="true"><use href="#i-barras"></use></svg> Qué se reporta más</h3>
+            <div v-for="c in categoriasOrdenadas" :key="c.nombre" class="barra-fila">
+              <span class="ico-chip" :class="'cat-' + iconoCategoria(c.nombre)" aria-hidden="true">
+                <svg class="ico"><use :href="'#i-' + iconoCategoria(c.nombre)"></use></svg>
+              </span>
+              <span class="datos">
+                <span class="etiqueta"><span>{{ c.nombre }}</span><span>{{ c.total }}</span></span>
+                <span class="barra-pista">
+                  <span class="barra-valor" :class="'cat-' + iconoCategoria(c.nombre)"
+                        :style="{ width: c.ancho + '%' }"></span>
+                </span>
+              </span>
+            </div>
+          </div>
+
+          <div v-if="estadisticas && !estadisticas.reportesCreados" class="vacio">
+            <span class="ico-chip"><svg class="ico"><use href="#i-barras"></use></svg></span>
+            <strong>Sin datos todavía</strong>
+            Los números aparecen cuando empiecen a entrar reportes.
+          </div>
+        </div>
+      </template>
+    </aside>
+
+    <!-- -------------------------------------------------------- mapa -->
+    <div class="lienzo">
       <div id="mapa"></div>
 
-      <div class="tarjeta" style="margin-top:16px">
-        <h2 id="titulo-lista">Reportes de la zona</h2>
-        <div id="lista-reportes"></div>
+      <p v-if="marcando" class="marcando">
+        <svg class="ico" aria-hidden="true"><use href="#i-centrar"></use></svg>
+        Toca el mapa donde está el problema
+      </p>
+
+      <div v-if="!marcando && reportes.length" class="leyenda" aria-hidden="true">
+        <b>Estado</b>
+        <ul>
+          <li><i style="background:var(--senal)"></i> Reportado</li>
+          <li><i style="background:var(--proceso)"></i> En trámite</li>
+          <li><i style="background:var(--verificado)"></i> Resuelto</li>
+        </ul>
       </div>
 
-      <div class="tarjeta oculto" id="tarjeta-detalle">
-        <h2>Detalle del reporte</h2>
-        <div id="detalle"></div>
-      </div>
+      <button v-if="!marcando" class="flotante-accion" @click="iniciarReporte">
+        <svg class="ico" aria-hidden="true"><use href="#i-mas"></use></svg>
+        Reportar un problema
+      </button>
     </div>
+  </div>
+
+  <!-- ------------------------------------------------ panel de detalle -->
+  <div v-if="detalle" class="capa" @click.self="detalle = null">
+    <section class="panel" role="dialog" aria-label="Detalle del reporte">
+      <div class="panel-encabezado">
+        <span class="ico-chip" :class="'cat-' + iconoCategoria(detalle.reporte.categoria)" aria-hidden="true">
+          <svg class="ico"><use :href="'#i-' + iconoCategoria(detalle.reporte.categoria)"></use></svg>
+        </span>
+        <h2>{{ detalle.reporte.titulo }}</h2>
+        <button class="cerrar" @click="detalle = null" aria-label="Cerrar">
+          <svg class="ico"><use href="#i-cerrar"></use></svg>
+        </button>
+      </div>
+      <p class="folio">{{ detalle.reporte.reportId }} · {{ detalle.reporte.categoria }}</p>
+
+      <ol class="via" aria-label="Avance del reporte">
+        <li v-for="(e, i) in estados" :key="e" class="via-parada"
+            :class="{ hecha: i < indiceEstado, actual: i === indiceEstado }">
+          <span class="via-punto">
+            <svg class="ico" aria-hidden="true"><use href="#i-listo"></use></svg>
+          </span>
+          <small>{{ e }}</small>
+        </li>
+      </ol>
+
+      <p>{{ detalle.reporte.descripcion }}</p>
+      <p class="pista" v-if="detalle.reporte.direccion">
+        <svg class="ico" aria-hidden="true"><use href="#i-pin"></use></svg>
+        {{ detalle.reporte.direccion }}
+      </p>
+      <img v-if="detalle.reporte.foto" class="foto" :src="detalle.reporte.foto" alt="Fotografía del problema reportado">
+
+      <div v-if="detalle.reporte.respuestaMunicipal" class="bloque-oficial">
+        <strong>
+          <svg class="ico" aria-hidden="true"><use href="#i-municipio"></use></svg>
+          Respuesta de la cuenta municipal
+        </strong>
+        <p style="margin:.3rem 0 0">{{ detalle.reporte.respuestaMunicipal }}</p>
+      </div>
+
+      <template v-if="detalle.reporte.evidencia">
+        <h3 class="seccion"><svg class="ico" aria-hidden="true"><use href="#i-camara"></use></svg> Evidencia de la solución</h3>
+        <img class="foto" :src="detalle.reporte.evidencia" alt="Evidencia del trabajo realizado">
+      </template>
+
+      <p class="pista">
+        <svg class="ico" aria-hidden="true"><use href="#i-usuario"></use></svg>
+        <span>
+          Reportado por
+          <button class="enlace-perfil" @click="verPerfil(detalle.reporte.autorId)">{{ detalle.reporte.autorNombre }}</button>
+          · {{ hace(detalle.reporte.creadoEn) }}
+        </span>
+      </p>
+
+      <div class="acciones">
+        <button v-if="puedeConfirmar" class="secundario" @click="confirmar">
+          <svg class="ico" aria-hidden="true"><use href="#i-pulgar"></use></svg>
+          Yo también lo vi ({{ detalle.reporte.confirmaciones }})
+        </button>
+        <button v-else-if="usuario && yaConfirme" class="marcado" disabled>
+          <svg class="ico" aria-hidden="true"><use href="#i-listo"></use></svg>
+          Ya lo confirmaste ({{ detalle.reporte.confirmaciones }})
+        </button>
+        <button v-if="usuario" :class="sigoEsto ? 'marcado' : 'secundario'" @click="alternarSeguir">
+          <svg class="ico" aria-hidden="true"><use :href="sigoEsto ? '#i-siguiendo' : '#i-seguir'"></use></svg>
+          {{ sigoEsto ? 'Siguiendo' : 'Seguir' }} ({{ detalle.reporte.seguidores }})
+        </button>
+      </div>
+      <p v-if="usuario && !sigoEsto" class="pista">
+        <svg class="ico" aria-hidden="true"><use href="#i-info"></use></svg>
+        Al seguirlo recibes sus avisos sin afirmar que lo viste.
+      </p>
+
+      <template v-if="detalle.reporte.estado === 'Resuelto' && usuario">
+        <h3 class="seccion"><svg class="ico" aria-hidden="true"><use href="#i-escudo"></use></svg> ¿Quedó resuelto?</h3>
+        <p class="pista">
+          <svg class="ico" aria-hidden="true"><use href="#i-info"></use></svg>
+          El municipio lo marcó como resuelto. Tu respuesta decide si se cierra o se reabre.
+        </p>
+        <div class="acciones">
+          <button @click="validar(true)">
+            <svg class="ico" aria-hidden="true"><use href="#i-pulgar"></use></svg> Sí, quedó resuelto
+          </button>
+          <button class="secundario" @click="validar(false)">
+            <svg class="ico" aria-hidden="true"><use href="#i-pulgar-abajo"></use></svg> No, sigue igual
+          </button>
+        </div>
+      </template>
+
+      <section class="seccion">
+        <h3><svg class="ico" aria-hidden="true"><use href="#i-pulso"></use></svg> Avance</h3>
+        <ol class="historial">
+          <li v-for="(h, i) in detalle.historial" :key="i">
+            <strong>{{ h.estado }}</strong>
+            <span class="dicho">{{ h.mensaje }}</span>
+            <span class="cuando">{{ fecha(h.creadoEn) }} por {{ h.autor }}</span>
+          </li>
+        </ol>
+      </section>
+
+      <section class="seccion">
+        <h3><svg class="ico" aria-hidden="true"><use href="#i-comentario"></use></svg> Comentarios ({{ detalle.comentarios.length }})</h3>
+        <p v-if="!detalle.comentarios.length" class="pista">Nadie ha comentado todavía.</p>
+        <article v-for="(c, i) in detalle.comentarios" :key="i" class="comentario" :class="{ oficial: c.oficial }">
+          <span class="inicial" :class="{ oficial: c.oficial }" aria-hidden="true">
+            {{ (c.autor || 'C').charAt(0) }}
+          </span>
+          <span class="cuerpo">
+            <p class="quien">
+              {{ c.autor || 'Ciudadano' }}
+              <span v-if="c.oficial" class="chip">
+                <svg class="ico" aria-hidden="true"><use href="#i-municipio"></use></svg> municipio
+              </span>
+            </p>
+            <p class="dicho">{{ c.texto }}</p>
+            <p class="folio">{{ hace(c.creadoEn) }}</p>
+          </span>
+        </article>
+
+        <template v-if="usuario">
+          <label for="nuevo-comentario">Escribe un comentario</label>
+          <textarea id="nuevo-comentario" v-model="comentario" placeholder="Agrega algo que ayude a entender el problema"></textarea>
+          <div class="acciones">
+            <button class="menor" @click="comentar" :disabled="!comentario.trim()">
+              <svg class="ico" aria-hidden="true"><use href="#i-enviar"></use></svg> Publicar
+            </button>
+          </div>
+        </template>
+        <p v-else class="pista">
+          <svg class="ico" aria-hidden="true"><use href="#i-candado"></use></svg>
+          Entra a tu cuenta para confirmar o comentar.
+        </p>
+      </section>
+
+      <p v-if="avisoDetalle" class="aviso" :class="avisoDetalle.tipo">
+        <svg class="ico" aria-hidden="true"><use :href="avisoDetalle.tipo === 'ok' ? '#i-listo' : '#i-alerta'"></use></svg>
+        <span>{{ avisoDetalle.texto }}</span>
+      </p>
+    </section>
+  </div>
+
+  <!-- ---------------------------------------------------- avisos -->
+  <div v-if="avisosAbierto" class="capa" @click.self="avisosAbierto = false">
+    <section class="panel" role="dialog" aria-label="Tus avisos">
+      <div class="panel-encabezado">
+        <span class="ico-chip" aria-hidden="true"><svg class="ico"><use href="#i-campana"></use></svg></span>
+        <h2>Tus avisos</h2>
+        <button class="cerrar" @click="avisosAbierto = false" aria-label="Cerrar">
+          <svg class="ico"><use href="#i-cerrar"></use></svg>
+        </button>
+      </div>
+
+      <div v-if="!avisos.length" class="vacio">
+        <span class="ico-chip"><svg class="ico"><use href="#i-campana"></use></svg></span>
+        <strong>Sin avisos</strong>
+        Aquí llegan los de los reportes que levantas, confirmas o sigues.
+      </div>
+
+      <article v-for="a in avisos" :key="a.sk" class="aviso-item" :class="{ 'sin-leer': !a.leida }"
+               @click="irA(a)">
+        <span v-if="!a.leida" class="punto" aria-hidden="true"></span>
+        <span class="cuerpo">
+          <h4>{{ a.titulo }}</h4>
+          <p>{{ a.cuerpo }}</p>
+          <p class="folio">{{ hace(a.creadoEn) }}</p>
+        </span>
+      </article>
+
+      <div class="acciones" v-if="sinLeer">
+        <button class="secundario menor" @click="marcarLeidos">
+          <svg class="ico" aria-hidden="true"><use href="#i-listo"></use></svg> Marcar todo como leído
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <!-- ---------------------------------------------------- perfil -->
+  <div v-if="perfil" class="capa" @click.self="perfil = null">
+    <section class="panel" role="dialog" aria-label="Perfil del ciudadano">
+      <div class="panel-encabezado">
+        <h2>Perfil</h2>
+        <button class="cerrar" @click="perfil = null" aria-label="Cerrar">
+          <svg class="ico"><use href="#i-cerrar"></use></svg>
+        </button>
+      </div>
+
+      <div class="perfil-cabecera">
+        <span class="inicial grande" aria-hidden="true">{{ perfil.usuario.nombre.charAt(0) }}</span>
+        <div>
+          <h3>{{ perfil.usuario.nombre }}</h3>
+          <p class="pista" style="margin:0">
+            <svg class="ico" aria-hidden="true"><use href="#i-pin"></use></svg>
+            <span>{{ perfil.usuario.colonia || 'Sin colonia registrada' }} · desde {{ fecha(perfil.usuario.desde) }}</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="cifras" style="padding:1rem 0 0">
+        <div class="cifra-tarjeta acento-senal">
+          <span class="encabezado"><span>reportes levantados</span>
+            <svg class="ico" aria-hidden="true"><use href="#i-megafono"></use></svg></span>
+          <b>{{ perfil.estadisticas.reportes }}</b>
+        </div>
+        <div class="cifra-tarjeta acento-verificado">
+          <span class="encabezado"><span>llegaron a Resuelto</span>
+            <svg class="ico" aria-hidden="true"><use href="#i-listo"></use></svg></span>
+          <b>{{ perfil.estadisticas.resueltos }}</b>
+        </div>
+        <div class="cifra-tarjeta">
+          <span class="encabezado"><span>confirmaciones recibidas</span>
+            <svg class="ico" aria-hidden="true"><use href="#i-vecinos"></use></svg></span>
+          <b>{{ perfil.estadisticas.apoyosRecibidos }}</b>
+        </div>
+        <div class="cifra-tarjeta">
+          <span class="encabezado"><span>reportes que confirmó</span>
+            <svg class="ico" aria-hidden="true"><use href="#i-pulgar"></use></svg></span>
+          <b>{{ perfil.estadisticas.confirmaciones }}</b>
+        </div>
+      </div>
+
+      <section class="seccion">
+        <h3><svg class="ico" aria-hidden="true"><use href="#i-insignia"></use></svg> Insignias</h3>
+        <div class="insignias">
+          <div v-for="i in perfil.insignias" :key="i.clave" class="insignia"
+               :class="i.obtenida ? 'obtenida' : 'pendiente'">
+            <span class="ico-chip" aria-hidden="true">
+              <svg class="ico"><use :href="'#i-' + iconoInsignia(i.clave)"></use></svg>
+            </span>
+            <span class="cuerpo">
+              <b>{{ i.titulo }}</b>
+              <span>{{ i.obtenida ? i.descripcion : i.avance + ' de ' + i.meta }}</span>
+              <span v-if="!i.obtenida" class="avance">
+                <i :style="{ width: porcentaje(i.avance, i.meta) + '%' }"></i>
+              </span>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section class="seccion" v-if="perfil.reportes.length">
+        <h3><svg class="ico" aria-hidden="true"><use href="#i-pin"></use></svg> Sus reportes</h3>
+        <button v-for="r in perfil.reportes" :key="r.reportId" class="ficha" style="padding-left:0;padding-right:0"
+                @click="verDetalle(r.reportId)">
+          <span class="ico-chip menor" :class="'cat-' + iconoCategoria(r.categoria)" aria-hidden="true">
+            <svg class="ico"><use :href="'#i-' + iconoCategoria(r.categoria)"></use></svg>
+          </span>
+          <span class="ficha-cuerpo">
+            <h3>{{ r.titulo }}</h3>
+            <span class="meta">
+              <span :class="claseEstado(r.estado)">
+                <svg class="ico" aria-hidden="true"><use :href="'#i-' + iconoEstado(r.estado)"></use></svg>
+                {{ r.estado }}
+              </span>
+              <span class="categoria">{{ r.categoria }}</span>
+            </span>
+          </span>
+        </button>
+      </section>
+    </section>
+  </div>
+
+  <!-- ------------------------------------------------- nuevo reporte -->
+  <div v-if="formAbierto" class="capa centrada" @click.self="formAbierto = false">
+    <section class="panel" role="dialog" aria-label="Nuevo reporte">
+      <div class="panel-encabezado">
+        <span class="ico-chip cat-bache" aria-hidden="true"><svg class="ico"><use href="#i-megafono"></use></svg></span>
+        <h2>Reportar un problema</h2>
+        <button class="cerrar" @click="formAbierto = false" aria-label="Cerrar">
+          <svg class="ico"><use href="#i-cerrar"></use></svg>
+        </button>
+      </div>
+
+      <label for="f-titulo">¿Qué está pasando?</label>
+      <input id="f-titulo" v-model="forma.titulo" maxlength="120" placeholder="Bache profundo sobre Av. Hidalgo">
+
+      <label for="f-categoria">Categoría</label>
+      <select id="f-categoria" v-model="forma.categoria">
+        <option v-for="c in categorias" :key="c" :value="c">{{ c }}</option>
+      </select>
+
+      <label for="f-direccion">Referencia</label>
+      <input id="f-direccion" v-model="forma.direccion" maxlength="160" placeholder="Frente al número 240, junto a la farmacia">
+
+      <label for="f-descripcion">Descripción</label>
+      <textarea id="f-descripcion" v-model="forma.descripcion" maxlength="1000"
+                placeholder="Desde cuándo está así y a quién afecta"></textarea>
+
+      <label for="f-foto">Fotografía</label>
+      <div class="zona-foto" :class="{ cargada: forma.archivo }">
+        <svg class="ico" aria-hidden="true"><use :href="forma.archivo ? '#i-listo' : '#i-camara'"></use></svg>
+        {{ forma.archivo ? forma.archivo.name : 'Una foto ayuda a que lo atiendan más rápido' }}
+        <input id="f-foto" type="file" accept="image/*" @change="forma.archivo = $event.target.files[0]">
+      </div>
+      <p class="pista">
+        <svg class="ico" aria-hidden="true"><use href="#i-escudo"></use></svg>
+        La foto se sube directo al almacenamiento, no pasa por el servidor.
+      </p>
+
+      <label>Ubicación</label>
+      <p class="pista" v-if="forma.lat">
+        <svg class="ico" aria-hidden="true"><use href="#i-pin"></use></svg>
+        Marcada en {{ forma.lat.toFixed(5) }}, {{ forma.lng.toFixed(5) }}
+      </p>
+      <p class="pista" v-else>
+        <svg class="ico" aria-hidden="true"><use href="#i-centrar"></use></svg>
+        Cierra esta ventana y toca el mapa para marcar el punto.
+      </p>
+
+      <div class="acciones">
+        <button class="ancho" @click="crearReporte" :disabled="enviando">
+          <svg class="ico" aria-hidden="true"><use href="#i-enviar"></use></svg>
+          {{ enviando ? 'Enviando…' : 'Enviar reporte' }}
+        </button>
+      </div>
+      <p v-if="avisoForma" class="aviso" :class="avisoForma.tipo">
+        <svg class="ico" aria-hidden="true"><use :href="avisoForma.tipo === 'ok' ? '#i-listo' : '#i-alerta'"></use></svg>
+        <span>{{ avisoForma.texto }}</span>
+      </p>
+    </section>
+  </div>
+
+  <!-- -------------------------------------------------------- sesión -->
+  <div v-if="sesionAbierta" class="capa centrada" @click.self="sesionAbierta = false">
+    <section class="panel" role="dialog" aria-label="Entrar a la plataforma">
+      <div class="panel-encabezado">
+        <span class="ico-chip" aria-hidden="true"><svg class="ico"><use href="#i-usuario"></use></svg></span>
+        <h2>{{ modoRegistro ? 'Crear una cuenta' : 'Entrar a tu cuenta' }}</h2>
+        <button class="cerrar" @click="sesionAbierta = false" aria-label="Cerrar">
+          <svg class="ico"><use href="#i-cerrar"></use></svg>
+        </button>
+      </div>
+
+      <template v-if="modoRegistro">
+        <label for="r-nombre">Nombre</label>
+        <input id="r-nombre" v-model="credenciales.nombre" placeholder="Nombre y apellido">
+        <label for="r-colonia">Colonia</label>
+        <input id="r-colonia" v-model="credenciales.colonia" placeholder="Centro">
+      </template>
+
+      <label for="r-email">Correo</label>
+      <input id="r-email" v-model="credenciales.email" type="email" autocomplete="email" placeholder="tucorreo@ejemplo.com">
+
+      <label for="r-password">Contraseña</label>
+      <input id="r-password" v-model="credenciales.password" type="password"
+             :autocomplete="modoRegistro ? 'new-password' : 'current-password'">
+      <p v-if="modoRegistro" class="pista">
+        <svg class="ico" aria-hidden="true"><use href="#i-candado"></use></svg>
+        Mínimo 8 caracteres.
+      </p>
+
+      <div class="acciones">
+        <button class="ancho" @click="entrar" :disabled="enviando">
+          <svg class="ico" aria-hidden="true"><use href="#i-entrar"></use></svg>
+          {{ modoRegistro ? 'Crear cuenta' : 'Entrar' }}
+        </button>
+        <button class="fantasma ancho" @click="modoRegistro = !modoRegistro">
+          {{ modoRegistro ? 'Ya tengo cuenta' : 'Crear una cuenta' }}
+        </button>
+      </div>
+      <p v-if="avisoSesion" class="aviso" :class="avisoSesion.tipo">
+        <svg class="ico" aria-hidden="true"><use :href="avisoSesion.tipo === 'ok' ? '#i-listo' : '#i-alerta'"></use></svg>
+        <span>{{ avisoSesion.texto }}</span>
+      </p>
+    </section>
   </div>
 </div>
 
+<style>[v-cloak] { display: none; }</style>
+<script src="https://unpkg.com/vue@3.4.38/dist/vue.global.prod.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="js/iconos.js"></script>
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
 <script src="js/app.js"></script>
