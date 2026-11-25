@@ -1,12 +1,30 @@
 """Consumidor de SQS: arma el mensaje y lo publica en SNS (notificacion al ciudadano)."""
 import json
 import os
+import time
 
 import boto3
 
 TOPICO_SNS = os.environ.get("TOPICO_SNS", "")
 URL_FRONTEND = os.environ.get("URL_FRONTEND", "")
 sns = boto3.client("sns")
+
+def _metrica(nombre, valor):
+    """Metrica en formato EMF; se duplica aqui para no acoplar el consumidor
+    de la cola al modulo del API."""
+    print(json.dumps({
+        "_aws": {
+            "Timestamp": int(time.time() * 1000),
+            "CloudWatchMetrics": [{
+                "Namespace": "ReportaTuCiudad",
+                "Dimensions": [["Ambiente"]],
+                "Metrics": [{"Name": nombre, "Unit": "Count"}],
+            }],
+        },
+        "Ambiente": os.environ.get("AMBIENTE", "dev"),
+        nombre: valor,
+    }))
+
 
 PLANTILLAS = {
     "reporte.creado": (
@@ -41,6 +59,9 @@ def handler(evento, contexto):  # noqa: ARG001
             print("ERROR al procesar mensaje:", repr(exc), registro.get("body"))
             fallidos.append({"itemIdentifier": registro["messageId"]})
     print("Eventos procesados: %s | fallidos: %s" % (procesados, len(fallidos)))
+    _metrica("NotificacionesEnviadas", procesados)
+    if fallidos:
+        _metrica("NotificacionesFallidas", len(fallidos))
     # Reintento parcial: solo vuelven a la cola los mensajes que fallaron.
     return {"batchItemFailures": fallidos}
 
